@@ -64,6 +64,11 @@ Para abrir sem empacotar (útil enquanto mexe no código): `python app.py`.
    python main.py --texto   # só texto, no terminal (para testar sem microfone)
    ```
 
+## Custo
+
+O JARVIS usa o modelo **Claude Haiku 5.5**, rápido e barato: cerca de um décimo de centavo de dólar
+por pedido. Para trocar de modelo, mude `MODELO` em `cerebro.py`.
+
 ## Spotify
 
 1. Entre em https://developer.spotify.com/dashboard e crie um app.

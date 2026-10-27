@@ -7,7 +7,7 @@ import anthropic
 
 import ferramentas
 
-MODELO = "claude-opus-5-5"
+MODELO = "claude-haiku-5-5"
 NOME_USUARIO = os.getenv("JARVIS_NOME_USUARIO", "senhor")
 
 PERSONALIDADE = f"""Você é J.A.R.V.I.S., o assistente pessoal de inteligência artificial do usuário, \
@@ -28,7 +28,7 @@ confirme em poucas palavras ("Feito, {NOME_USUARIO}."). Se faltar informação e
 Ações sensíveis (comandos de terminal, envio de mensagens) já pedem confirmação ao usuário \
 automaticamente; não peça de novo."""
 
-PESQUISA_WEB = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
+PESQUISA_WEB = {"type": "web_search_20250305", "name": "web_search", "max_uses": 3}
 
 
 class Cerebro:
@@ -37,7 +37,7 @@ class Cerebro:
         self.historico: list = []
 
     def _chamar(self):
-        return self.cliente.beta.messages.create(
+        return self.cliente.messages.create(
             model=MODELO,
             max_tokens=16000,
             system=PERSONALIDADE + f"\n\nAgora são {datetime.datetime.now():%d/%m/%Y %H:%M}.",
@@ -45,9 +45,6 @@ class Cerebro:
             messages=self.historico,
             # Esforço baixo = respostas rápidas, que é o que importa numa conversa por voz.
             output_config={"effort": "low"},
-            # Se um pedido for recusado por engano, a API tenta de novo em outro modelo.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
         )
 
     def responder(self, texto_usuario: str, ao_falar) -> None:
