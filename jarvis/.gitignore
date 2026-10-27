@@ -1,0 +1,6 @@
+.env
+contatos.json
+.cache*
+__pycache__/
+*.mp3
+memoria.json

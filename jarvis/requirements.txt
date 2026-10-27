@@ -1,0 +1,11 @@
+anthropic>=2.3.0
+python-dotenv>=1.0
+SpeechRecognition>=3.10
+PyAudio>=0.2.14
+edge-tts>=6.1
+pygame>=2.5
+pyttsx3>=2.90
+spotipy>=2.24
+pywhatkit>=5.4
+pyautogui>=0.9.54
+psutil>=5.9
