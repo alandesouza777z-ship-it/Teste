@@ -22,12 +22,46 @@ APELIDOS_ATIVACAO = {PALAVRA_ATIVACAO, "jarvis", "jarvas", "jarbas", "javis", "j
 
 # ---------- Escuta ----------
 
+# "whisper" (padrão, roda no computador, muito mais preciso) ou "google" (online, mais leve).
+RECONHECIMENTO = os.getenv("JARVIS_RECONHECIMENTO", "whisper").lower()
+# Modelos do Whisper: "base" (rápido), "small" (equilíbrio, padrão), "medium" (mais preciso e mais lento).
+MODELO_WHISPER = os.getenv("JARVIS_WHISPER_MODELO", "small")
+# Palavras que o Whisper deve esperar ouvir (ajuda com nomes próprios).
+VOCABULARIO = ("Jarvis, Spotify, WhatsApp, YouTube, Google Chrome, Microsoft Edge, OBS Studio, "
+               "Obsidian, Claude, Discord, Steam, Word, Excel, VS Code.")
+# Frases que o Whisper às vezes "inventa" em silêncio ou ruído.
+ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir", "inscreva-se",
+               "legenda adriana", "sous-titres", "subtitles by")
+
 _reconhecedor = sr.Recognizer()
 _reconhecedor.dynamic_energy_threshold = True   # se adapta ao barulho do ambiente
-_reconhecedor.pause_threshold = 0.9             # silêncio que encerra a frase (não corta no meio)
-_reconhecedor.non_speaking_duration = 0.4
-_reconhecedor.phrase_threshold = 0.2
-_microfone = None
+_reconhecedor.pause_threshold = 1.1             # silêncio que encerra a frase: pausas curtas não cortam a fala
+_reconhecedor.non_speaking_duration = 0.5
+_reconhecedor.phrase_threshold = 0.15
+_fonte = None
+_whisper = None
+_whisper_status = "parado"
+
+
+def _carregar_whisper() -> None:
+    global _whisper, _whisper_status
+    try:
+        from faster_whisper import WhisperModel
+
+        _whisper_status = "carregando"
+        # Na primeira vez baixa o modelo (centenas de MB); depois fica guardado no computador.
+        _whisper = WhisperModel(MODELO_WHISPER, device=os.getenv("JARVIS_WHISPER_DISPOSITIVO", "cpu"),
+                                compute_type="int8")
+        _whisper_status = "pronto"
+    except Exception as erro:
+        print(f"Whisper indisponível ({erro}); usando o reconhecimento do Google.")
+        _whisper_status = "erro"
+
+
+def preparar_reconhecimento() -> None:
+    """Começa a carregar o Whisper em segundo plano (enquanto isso, usa o Google)."""
+    if RECONHECIMENTO == "whisper" and _whisper_status == "parado":
+        threading.Thread(target=_carregar_whisper, daemon=True).start()
 
 
 def _sem_acento(texto: str) -> str:
@@ -46,18 +80,26 @@ def separar_ativacao(frase: str) -> str | None:
     return None
 
 
-def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 15) -> list[str]:
-    """Escuta o microfone e devolve as interpretações possíveis da frase (a mais provável primeiro)."""
-    global _microfone
-    if _microfone is None:
-        _microfone = sr.Microphone()
-        with _microfone as fonte:
-            _reconhecedor.adjust_for_ambient_noise(fonte, duration=1.5)
-    with _microfone as fonte:
-        try:
-            audio = _reconhecedor.listen(fonte, timeout=tempo_limite, phrase_time_limit=limite_frase)
-        except sr.WaitTimeoutError:
-            return []
+def _transcrever_whisper(audio: sr.AudioData) -> list[str]:
+    import numpy as np
+
+    bruto = np.frombuffer(audio.get_raw_data(convert_rate=16000, convert_width=2), dtype=np.int16)
+    segmentos, _ = _whisper.transcribe(
+        bruto.astype(np.float32) / 32768.0,
+        language="pt",
+        beam_size=3,
+        vad_filter=True,
+        condition_on_previous_text=False,
+        initial_prompt=VOCABULARIO,
+    )
+    partes = [s.text.strip() for s in segmentos if s.no_speech_prob < 0.6 and s.avg_logprob > -1.2]
+    texto = " ".join(partes).strip()
+    if not texto or any(a in texto.lower() for a in ALUCINACOES):
+        return []
+    return [texto]
+
+
+def _transcrever_google(audio: sr.AudioData) -> list[str]:
     try:
         resultado = _reconhecedor.recognize_google(audio, language="pt-BR", show_all=True)
     except (sr.UnknownValueError, sr.RequestError):
@@ -67,7 +109,27 @@ def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 
     return [alt["transcript"] for alt in resultado.get("alternative", []) if alt.get("transcript")]
 
 
-def ouvir(tempo_limite: float | None = None, limite_frase: float = 15) -> str:
+def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 25) -> list[str]:
+    """Escuta o microfone e devolve as interpretações possíveis da frase (a mais provável primeiro)."""
+    global _fonte
+    if _fonte is None:
+        preparar_reconhecimento()
+        # O microfone fica aberto o tempo todo: reabrir a cada escuta perdia o começo das frases.
+        _fonte = sr.Microphone(sample_rate=16000).__enter__()
+        _reconhecedor.adjust_for_ambient_noise(_fonte, duration=1.5)
+    try:
+        audio = _reconhecedor.listen(_fonte, timeout=tempo_limite, phrase_time_limit=limite_frase)
+    except sr.WaitTimeoutError:
+        return []
+    if _whisper_status == "pronto":
+        try:
+            return _transcrever_whisper(audio)
+        except Exception as erro:
+            print(f"Erro no Whisper: {erro}")
+    return _transcrever_google(audio)
+
+
+def ouvir(tempo_limite: float | None = None, limite_frase: float = 25) -> str:
     alternativas = ouvir_alternativas(tempo_limite, limite_frase)
     return alternativas[0] if alternativas else ""
 
@@ -82,8 +144,32 @@ def preparar_para_fala(texto: str) -> str:
     return re.sub(r"\s{2,}", " ", texto).strip()
 
 
+ELEVENLABS_CHAVE = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOZ = os.getenv("ELEVENLABS_VOZ", "")
+ELEVENLABS_MODELO = os.getenv("ELEVENLABS_MODELO", "eleven_flash_v2_5")
+
+
+def _sintetizar_elevenlabs(texto: str) -> bytes:
+    import requests
+
+    resposta = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOZ}",
+        params={"output_format": "mp3_44100_128"},
+        headers={"xi-api-key": ELEVENLABS_CHAVE},
+        json={"text": preparar_para_fala(texto), "model_id": ELEVENLABS_MODELO, "language_code": "pt"},
+        timeout=20,
+    )
+    resposta.raise_for_status()
+    return resposta.content
+
+
 def sintetizar(texto: str) -> bytes:
-    """Gera o áudio MP3 da fala com voz neural (edge-tts, precisa de internet)."""
+    """Gera o áudio MP3 da fala: ElevenLabs se configurado, senão voz neural da Microsoft (edge-tts)."""
+    if ELEVENLABS_CHAVE and ELEVENLABS_VOZ:
+        try:
+            return _sintetizar_elevenlabs(texto)
+        except Exception as erro:
+            print(f"ElevenLabs falhou ({erro}); usando a voz da Microsoft.")
     import edge_tts
 
     async def _gerar() -> bytes:

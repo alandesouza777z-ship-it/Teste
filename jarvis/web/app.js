@@ -1,28 +1,45 @@
-// Interface do J.A.R.V.I.S.: esfera 3D de partículas que reage aos graves da voz.
-import * as THREE from "./three.module.min.js";
+// Interface do J.A.R.V.I.S.: núcleo 3D, HUD e espectro que reagem à voz, com brilho cinematográfico.
+import * as THREE from "three";
+import { EffectComposer } from "./jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "./jsm/postprocessing/OutputPass.js";
 
-// ---------- Cena ----------
+// ---------- Renderizador, câmera e pós-processamento ----------
 const canvas = document.getElementById("cena");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setClearColor(0x000000, 1);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const cena = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-const nucleo = new THREE.Group();
-cena.add(nucleo);
+cena.fog = new THREE.FogExp2(0x000000, 0.045);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+camera.position.set(0, 0, 6);
 
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(cena, camera));
+const brilhoPos = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.8, 0.55, 0.22);
+composer.addPass(brilhoPos);
+composer.addPass(new OutputPass());
+
+const uniformes = {
+  uTempo: { value: 0 }, uGrave: { value: 0 }, uMedio: { value: 0 }, uAtividade: { value: 0 },
+  uPixel: { value: 1 }, uLuz: { value: 0.7 },
+};
+
+let distanciaBase = 6;
 function redimensionar() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  brilhoPos.resolution.set(w, h);
   camera.aspect = w / h;
-  // Em janelas estreitas, afasta a câmera para a esfera caber.
-  camera.position.z = 4.6 / Math.min(1, camera.aspect * 1.1);
+  distanciaBase = 6 / Math.min(1, camera.aspect * 0.95);
   camera.updateProjectionMatrix();
-  uniformes.uPixel.value = renderer.getPixelRatio() * h / 800;
+  uniformes.uPixel.value = renderer.getPixelRatio() * h / 820;
 }
 
-// ---------- Esfera de partículas (shader com ruído) ----------
+// ---------- Ruído para os shaders ----------
 const RUIDO = /* glsl */ `
 vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
 vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
@@ -48,182 +65,253 @@ float snoise(vec3 v){
   return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }`;
 
-const uniformes = {
-  uTempo: { value: 0 },
-  uGrave: { value: 0 },
-  uMedio: { value: 0 },
-  uAtividade: { value: 0 },
-  uPixel: { value: 1 },
-  uCor: { value: new THREE.Color("#a0a0a0") },
-  uCor2: { value: new THREE.Color("#ffffff") },
-};
+const aditivo = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
+const nucleo = new THREE.Group();
+cena.add(nucleo);
 
+// ---------- Esfera de partículas ----------
 function esferaFibonacci(quantidade) {
-  const posicoes = new Float32Array(quantidade * 3);
-  const aleatorio = new Float32Array(quantidade);
+  const pos = new Float32Array(quantidade * 3), aleatorio = new Float32Array(quantidade);
   const ouro = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < quantidade; i++) {
-    const y = 1 - (i / (quantidade - 1)) * 2;
-    const r = Math.sqrt(1 - y * y);
-    const t = ouro * i;
-    posicoes.set([Math.cos(t) * r, y, Math.sin(t) * r], i * 3);
+    const y = 1 - (i / (quantidade - 1)) * 2, r = Math.sqrt(1 - y * y), t = ouro * i;
+    pos.set([Math.cos(t) * r, y, Math.sin(t) * r], i * 3);
     aleatorio[i] = Math.random();
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(posicoes, 3));
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   g.setAttribute("aAleatorio", new THREE.BufferAttribute(aleatorio, 1));
   return g;
 }
 
-const particulas = new THREE.Points(
-  esferaFibonacci(12000),
-  new THREE.ShaderMaterial({
-    uniforms: uniformes,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    vertexShader: /* glsl */ `
-      ${RUIDO}
-      uniform float uTempo, uGrave, uMedio, uAtividade, uPixel;
-      attribute float aAleatorio;
-      varying float vBrilho;
-      void main() {
-        vec3 dir = normalize(position);
-        float n1 = snoise(dir * 1.7 + vec3(uTempo * 0.22));
-        float n2 = snoise(dir * 4.2 - vec3(uTempo * 0.55));
-        float desloc = n1 * (0.05 + uGrave * 0.3 + uAtividade * 0.04)
-                     + n2 * (0.015 + uMedio * 0.1)
-                     + uGrave * 0.08;
-        vec4 mv = modelViewMatrix * vec4(dir * (1.0 + desloc), 1.0);
-        gl_Position = projectionMatrix * mv;
-        gl_PointSize = (1.3 + aAleatorio * 1.7 + uGrave * 2.6) * uPixel * (4.6 / -mv.z);
-        vBrilho = 0.5 + max(desloc, 0.0) * 3.0 + uAtividade * 0.22 + aAleatorio * 0.12;
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform vec3 uCor, uCor2;
-      varying float vBrilho;
-      void main() {
-        float d = length(gl_PointCoord - 0.5);
-        if (d > 0.5) discard;
-        float alfa = smoothstep(0.5, 0.0, d);
-        vec3 cor = mix(uCor, uCor2, clamp(vBrilho - 0.45, 0.0, 1.0));
-        gl_FragColor = vec4(cor * vBrilho, alfa);
-      }`,
-  })
-);
+const particulas = new THREE.Points(esferaFibonacci(14000), new THREE.ShaderMaterial({
+  ...aditivo,
+  uniforms: uniformes,
+  vertexShader: /* glsl */ `
+    ${RUIDO}
+    uniform float uTempo, uGrave, uMedio, uAtividade, uPixel;
+    attribute float aAleatorio;
+    varying float vBrilho;
+    void main() {
+      vec3 dir = normalize(position);
+      float n1 = snoise(dir * 1.6 + vec3(uTempo * 0.2));
+      float n2 = snoise(dir * 4.0 - vec3(uTempo * 0.5));
+      float desloc = n1 * (0.045 + uGrave * 0.3 + uAtividade * 0.04) + n2 * (0.012 + uMedio * 0.1) + uGrave * 0.08;
+      vec4 mv = modelViewMatrix * vec4(dir * (1.0 + desloc), 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = (1.1 + aAleatorio * 1.5 + uGrave * 1.1) * uPixel * (6.0 / -mv.z);
+      // Partículas da frente mais fortes que as de trás: dá profundidade.
+      float frente = smoothstep(-1.2, 1.0, (modelViewMatrix * vec4(dir, 0.0)).z + 0.2);
+      vBrilho = (0.3 + max(desloc, 0.0) * 1.8 + uAtividade * 0.18 + aAleatorio * 0.1) * (0.35 + 0.65 * frente);
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform float uLuz;
+    varying float vBrilho;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      gl_FragColor = vec4(vec3(vBrilho * uLuz), smoothstep(0.5, 0.0, d));
+    }`,
+}));
 nucleo.add(particulas);
 
-// Brilho central
-function texturaBrilho() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 256;
-  const ctx = c.getContext("2d");
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, "rgba(255,255,255,0.32)");
-  g.addColorStop(0.25, "rgba(200,200,200,0.12)");
-  g.addColorStop(0.6, "rgba(120,120,120,0.04)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  return new THREE.CanvasTexture(c);
-}
-const brilho = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: texturaBrilho(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
-}));
-brilho.scale.setScalar(3.4);
-cena.add(brilho);
+// ---------- Núcleo de cristal com borda luminosa ----------
+const materialCristal = new THREE.ShaderMaterial({
+  ...aditivo,
+  uniforms: { ...uniformes },
+  vertexShader: /* glsl */ `
+    varying vec3 vNormal; varying vec3 vVista;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vNormal = normalize(normalMatrix * normal);
+      vVista = normalize(-mv.xyz);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform float uGrave, uAtividade;
+    varying vec3 vNormal; varying vec3 vVista;
+    void main() {
+      float fresnel = pow(1.0 - abs(dot(vNormal, vVista)), 2.2);
+      float forca = fresnel * (0.4 + uGrave * 0.6 + uAtividade * 0.2) + 0.02;
+      gl_FragColor = vec4(vec3(forca), 1.0);
+    }`,
+});
+const cristal = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 1), materialCristal);
+const arestasCristal = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.37, 1)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, ...aditivo, opacity: 0.35 })
+);
+nucleo.add(cristal, arestasCristal);
 
-// Casca geométrica
+// Casca geodésica externa
 const casca = new THREE.LineSegments(
-  new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.32, 2)),
-  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false })
+  new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.26, 2)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, ...aditivo, opacity: 0.045 })
 );
 nucleo.add(casca);
 
-// Anéis orbitais tracejados
-const aneis = [];
-[[1.62, 0.35, 0.0], [1.78, -0.5, 0.6], [1.95, 1.2, -0.3]].forEach(([raio, rx, rz], i) => {
+// ---------- HUD (anéis voltados para a câmera) ----------
+const hud = new THREE.Group();
+cena.add(hud);
+const materialHud = (opacidade) => new THREE.LineBasicMaterial({ color: 0xffffff, ...aditivo, opacity: opacidade });
+
+function arco(raio, inicio, fim, opacidade, segmentos = 96) {
   const pontos = [];
-  for (let k = 0; k <= 256; k++) {
-    const a = (k / 256) * Math.PI * 2;
+  for (let i = 0; i <= segmentos; i++) {
+    const a = inicio + (fim - inicio) * (i / segmentos);
     pontos.push(new THREE.Vector3(Math.cos(a) * raio, Math.sin(a) * raio, 0));
   }
-  const linha = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(pontos),
-    new THREE.LineDashedMaterial({
-      color: 0xffffff, dashSize: 0.06 + i * 0.05, gapSize: 0.05 + i * 0.03,
-      transparent: true, opacity: 0.32 - i * 0.07, blending: THREE.AdditiveBlending, depthWrite: false,
-    })
-  );
-  linha.computeLineDistances();
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pontos), materialHud(opacidade));
+}
+
+function anelDeMarcas(raio, quantidade, curta, longa, cadaLonga, opacidade) {
+  const pos = [];
+  for (let i = 0; i < quantidade; i++) {
+    const a = (i / quantidade) * Math.PI * 2, tam = i % cadaLonga === 0 ? longa : curta;
+    pos.push(Math.cos(a) * raio, Math.sin(a) * raio, 0, Math.cos(a) * (raio + tam), Math.sin(a) * (raio + tam), 0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  return new THREE.LineSegments(g, materialHud(opacidade));
+}
+
+const camadasHud = [];
+function camada(objetos, velocidade) {
+  const grupo = new THREE.Group();
+  objetos.forEach((o) => grupo.add(o));
+  grupo.userData.velocidade = velocidade;
+  camadasHud.push(grupo);
+  hud.add(grupo);
+  return grupo;
+}
+const TAU = Math.PI * 2;
+camada([anelDeMarcas(1.62, 180, 0.025, 0.07, 15, 0.35)], 0.03);
+camada([arco(1.8, 0, TAU * 0.2, 0.55), arco(1.8, TAU * 0.33, TAU * 0.5, 0.55), arco(1.8, TAU * 0.6, TAU * 0.9, 0.55)], -0.12);
+camada([arco(1.9, 0, TAU, 0.1, 256)], 0);
+camada([arco(2.06, 0, TAU * 0.12, 0.8), arco(2.06, TAU * 0.5, TAU * 0.62, 0.8)], 0.22);
+camada([anelDeMarcas(2.18, 72, 0.02, 0.02, 1, 0.22)], -0.05);
+camada([arco(2.45, TAU * 0.05, TAU * 0.2, 0.25), arco(2.45, TAU * 0.55, TAU * 0.7, 0.25)], -0.02);
+
+// Espectro de áudio em volta da esfera
+const BARRAS = 120;
+const espectro = new THREE.InstancedMesh(
+  new THREE.PlaneGeometry(0.014, 1).translate(0, 0.5, 0),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, ...aditivo, opacity: 0.85, side: THREE.DoubleSide }),
+  BARRAS
+);
+hud.add(espectro);
+const alturas = new Float32Array(BARRAS);
+const auxiliar = new THREE.Object3D();
+function atualizarEspectro(valores) {
+  for (let i = 0; i < BARRAS; i++) {
+    alturas[i] += (valores[i] - alturas[i]) * 0.35;
+    const a = (i / BARRAS) * TAU + Math.PI / 2;
+    auxiliar.position.set(Math.cos(a) * 1.36, Math.sin(a) * 1.36, 0);
+    auxiliar.rotation.set(0, 0, a - Math.PI / 2);
+    auxiliar.scale.set(1, 0.015 + alturas[i] * 0.22, 1);
+    auxiliar.updateMatrix();
+    espectro.setMatrixAt(i, auxiliar.matrix);
+  }
+  espectro.instanceMatrix.needsUpdate = true;
+}
+
+// Anéis orbitais em 3D
+const orbitas = [];
+[[2.3, 1.15, 0.25], [2.6, -1.0, -0.4]].forEach(([raio, rx, rz], i) => {
+  const linha = arco(raio, 0, TAU, 0.18, 256);
   linha.rotation.set(rx, 0, rz);
-  linha.userData.velocidade = (i % 2 ? -1 : 1) * (0.08 + i * 0.05);
-  aneis.push(linha);
-  cena.add(linha);
+  const satelite = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const grupo = new THREE.Group();
+  grupo.add(linha);
+  grupo.userData = { raio, satelite, velocidade: (i ? -1 : 1) * (0.25 + i * 0.1), linha };
+  linha.add(satelite);
+  cena.add(grupo);
+  orbitas.push(grupo);
 });
 
-// Poeira ao fundo
-const poeira = (() => {
-  const n = 700, pos = new Float32Array(n * 3);
+// Campo de estrelas com profundidade
+const estrelas = (() => {
+  const n = 2200, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const v = new THREE.Vector3().randomDirection().multiplyScalar(2.4 + Math.random() * 5);
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(6 + Math.random() * 40);
     pos.set([v.x, v.y, v.z], i * 3);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  return new THREE.Points(g, new THREE.PointsMaterial({
-    color: 0x9a9a9a, size: 0.018, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
-  }));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, ...aditivo, opacity: 0.55 }));
 })();
-cena.add(poeira);
+cena.add(estrelas);
 
-// Ondas de choque disparadas pelas batidas de grave
+// Ondas de choque nas batidas de grave
 const ondas = [];
 function dispararOnda(forca) {
-  const onda = new THREE.Mesh(
-    new THREE.RingGeometry(0.985, 1.0, 128),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 * forca, blending: THREE.AdditiveBlending, depthWrite: false })
-  );
+  const onda = new THREE.Mesh(new THREE.RingGeometry(0.99, 1.0, 160),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, ...aditivo, opacity: 0.5 * forca }));
   onda.userData = { idade: 0, forca };
   ondas.push(onda);
-  cena.add(onda);
+  hud.add(onda);
 }
 
 // ---------- Áudio ----------
-let contexto = null, analisador = null, dadosFreq = null;
-let fonteAtual = null;
-let simulacaoAte = 0;
+let contexto = null, analisador = null, entrada = null, dadosFreq = null, fonteAtual = null;
+let simulacaoAte = 0, efeitoVoz = true;
+
+function respostaAoImpulso(ctx, segundos, decaimento) {
+  const tamanho = Math.floor(ctx.sampleRate * segundos);
+  const buffer = ctx.createBuffer(2, tamanho, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const dados = buffer.getChannelData(c);
+    for (let i = 0; i < tamanho; i++) dados[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / tamanho, decaimento);
+  }
+  return buffer;
+}
 
 function prepararAudio() {
   if (contexto) return;
   contexto = new (window.AudioContext || window.webkitAudioContext)();
   analisador = contexto.createAnalyser();
   analisador.fftSize = 2048;
-  analisador.smoothingTimeConstant = 0.55;
+  analisador.smoothingTimeConstant = 0.6;
   dadosFreq = new Uint8Array(analisador.frequencyBinCount);
+  const saida = contexto.createGain();
+  saida.connect(analisador).connect(contexto.destination);
 
-  // Cadeia de efeitos: reforço de grave + compressor, para a voz soar mais encorpada.
-  const grave = contexto.createBiquadFilter();
-  grave.type = "lowshelf";
-  grave.frequency.value = 180;
-  grave.gain.value = 4;
   const compressor = contexto.createDynamicsCompressor();
-  compressor.threshold.value = -18;
+  compressor.threshold.value = -20;
   compressor.ratio.value = 3;
-  grave.connect(compressor).connect(analisador).connect(contexto.destination);
-  analisador.userData = { entrada: grave };
+  const corpo = contexto.createBiquadFilter();
+  corpo.type = "lowshelf"; corpo.frequency.value = 170; corpo.gain.value = 3;
+  entrada = contexto.createBiquadFilter();
+  entrada.type = "highpass"; entrada.frequency.value = 75;
+
+  if (efeitoVoz) {
+    // "Efeito JARVIS": presença nítida, leve dobra metálica e ambiente curto de sala.
+    const presenca = contexto.createBiquadFilter();
+    presenca.type = "peaking"; presenca.frequency.value = 3200; presenca.Q.value = 0.8; presenca.gain.value = 3.5;
+    entrada.connect(corpo).connect(presenca).connect(compressor);
+    compressor.connect(saida);
+    const dobra = contexto.createDelay(0.05);
+    dobra.delayTime.value = 0.011;
+    const ganhoDobra = contexto.createGain();
+    ganhoDobra.gain.value = 0.2;
+    compressor.connect(dobra).connect(ganhoDobra).connect(saida);
+    const sala = contexto.createConvolver();
+    sala.buffer = respostaAoImpulso(contexto, 0.45, 3.2);
+    const ganhoSala = contexto.createGain();
+    ganhoSala.gain.value = 0.13;
+    compressor.connect(sala).connect(ganhoSala).connect(saida);
+  } else {
+    entrada.connect(corpo).connect(compressor).connect(saida);
+  }
 }
 
 function base64ParaBuffer(b64) {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 }
 
-function avisarFimDaFala() {
-  window.pywebview?.api?.audio_terminou();
-}
+const avisarFimDaFala = () => api()?.audio_terminou();
 
 async function tocar(b64) {
   prepararAudio();
@@ -233,7 +321,7 @@ async function tocar(b64) {
     fonteAtual?.stop();
     const fonte = contexto.createBufferSource();
     fonte.buffer = buffer;
-    fonte.connect(analisador.userData.entrada);
+    fonte.connect(entrada);
     fonte.onended = () => { if (fonteAtual === fonte) fonteAtual = null; avisarFimDaFala(); };
     fonteAtual = fonte;
     fonte.start();
@@ -243,11 +331,13 @@ async function tocar(b64) {
   }
 }
 
-let graveSuave = 0, medioSuave = 0, mediaLenta = 0, ultimaBatida = 0;
+let graveSuave = 0, medioSuave = 0, mediaLenta = 0, ultimaBatida = 0, tremor = 0;
+const valoresEspectro = new Float32Array(BARRAS);
 
 function lerAudio(t) {
   let grave = 0, medio = 0;
-  if (analisador && fonteAtual) {
+  const falandoDeVerdade = analisador && fonteAtual;
+  if (falandoDeVerdade) {
     analisador.getByteFrequencyData(dadosFreq);
     const hzPorBin = contexto.sampleRate / analisador.fftSize;
     const faixa = (de, ate) => {
@@ -258,127 +348,206 @@ function lerAudio(t) {
     };
     grave = Math.min(1, Math.pow(faixa(50, 260), 1.4) * 1.7);
     medio = Math.min(1, faixa(260, 2200) * 1.4);
-  } else if (t < simulacaoAte) {
-    // Fala sem áudio analisável (voz offline): simula as sílabas.
-    grave = 0.25 + 0.35 * Math.abs(Math.sin(t * 9.5) * Math.sin(t * 3.1));
-    medio = grave * 0.8;
+    // Espectro espelhado (escala logarítmica de 70 Hz a 7 kHz).
+    const metade = BARRAS / 2;
+    for (let i = 0; i < metade; i++) {
+      const de = 70 * Math.pow(100, i / metade), ate = 70 * Math.pow(100, (i + 1) / metade);
+      const v = Math.min(1, faixa(de, ate) * 1.6);
+      valoresEspectro[i] = v;
+      valoresEspectro[BARRAS - 1 - i] = v;
+    }
+  } else {
+    const simulando = t < simulacaoAte;
+    if (simulando) {
+      grave = 0.25 + 0.35 * Math.abs(Math.sin(t * 9.5) * Math.sin(t * 3.1));
+      medio = grave * 0.8;
+    }
+    for (let i = 0; i < BARRAS; i++) {
+      const onda = 0.08 + 0.06 * Math.sin(t * 2 + i * 0.35) * Math.sin(t * 0.7 + i * 0.11);
+      valoresEspectro[i] = simulando ? grave * (0.5 + 0.5 * Math.sin(i * 0.7 + t * 12)) : onda * (0.4 + atividade);
+    }
   }
-  // Ataque rápido, queda suave.
   graveSuave += (grave - graveSuave) * (grave > graveSuave ? 0.55 : 0.12);
   medioSuave += (medio - medioSuave) * (medio > medioSuave ? 0.5 : 0.1);
   mediaLenta += (grave - mediaLenta) * 0.03;
   if (grave - mediaLenta > 0.14 && t - ultimaBatida > 0.22) {
     ultimaBatida = t;
     dispararOnda(Math.min(1, 0.5 + grave));
-    tremor = Math.min(0.06, 0.02 + grave * 0.04);
+    tremor = Math.min(0.05, 0.015 + grave * 0.035);
   }
 }
 
 // ---------- Estados ----------
 const ESTADOS = {
-  ocioso:   { rotulo: "aguardando · diga “jarvis”", cor: "#a0a0a0", cor2: "#ffffff", atividade: 0.0, giro: 0.05 },
-  ouvindo:  { rotulo: "ouvindo",                    cor: "#d0d0d0", cor2: "#ffffff", atividade: 0.7, giro: 0.08 },
-  pensando: { rotulo: "processando",                cor: "#7a7a7a", cor2: "#e0e0e0", atividade: 0.45, giro: 0.45 },
-  falando:  { rotulo: "falando",                    cor: "#b8b8b8", cor2: "#ffffff", atividade: 0.35, giro: 0.1 },
+  iniciando: { rotulo: "inicializando", luz: 0.55, atividade: 0.2, giro: 0.3, brilho: 0.8 },
+  ocioso:    { rotulo: "aguardando", luz: 0.7, atividade: 0.0, giro: 0.06, brilho: 0.8 },
+  ouvindo:   { rotulo: "ouvindo", luz: 0.95, atividade: 0.75, giro: 0.1, brilho: 1.0 },
+  pensando:  { rotulo: "processando", luz: 0.6, atividade: 0.5, giro: 0.6, brilho: 0.9 },
+  falando:   { rotulo: "falando", luz: 0.8, atividade: 0.35, giro: 0.12, brilho: 0.85 },
 };
-let estado = ESTADOS.ocioso;
-const corAlvo = new THREE.Color(estado.cor), cor2Alvo = new THREE.Color(estado.cor2);
-let atividade = 0, giro = 0.05, tremor = 0;
+let estado = ESTADOS.iniciando, atividade = 0.2, giro = 0.3;
 
-const elEstado = document.getElementById("estado");
-const elFala = document.getElementById("fala");
-const elVoce = document.getElementById("voce");
-const elConfirmacao = document.getElementById("confirmacao");
+const $ = (id) => document.getElementById(id);
+const elEstado = $("estado"), elFala = $("fala"), elVoce = $("voce"), elConfirmacao = $("confirmacao");
 
 // ---------- Animação ----------
 const relogio = new THREE.Clock();
+const mouse = new THREE.Vector2(), olhar = new THREE.Vector2();
+window.addEventListener("pointermove", (e) => {
+  mouse.set(e.clientX / window.innerWidth - 0.5, e.clientY / window.innerHeight - 0.5);
+});
+
 function quadro() {
-  const dt = Math.min(relogio.getDelta(), 0.05);
-  const t = relogio.elapsedTime;
+  const dt = Math.min(relogio.getDelta(), 0.05), t = relogio.elapsedTime;
   lerAudio(t);
 
   atividade += (estado.atividade - atividade) * 0.05;
   giro += (estado.giro - giro) * 0.04;
-  uniformes.uCor.value.lerp(corAlvo, 0.05);
-  uniformes.uCor2.value.lerp(cor2Alvo, 0.05);
-
-  const respiracao = estado === ESTADOS.ouvindo ? 0.04 * Math.sin(t * 4) : 0.015 * Math.sin(t * 1.3);
+  uniformes.uLuz.value += (estado.luz - uniformes.uLuz.value) * 0.05;
+  brilhoPos.strength += (estado.brilho + graveSuave * 0.25 - brilhoPos.strength) * 0.1;
   uniformes.uTempo.value = t;
   uniformes.uGrave.value = graveSuave;
   uniformes.uMedio.value = medioSuave;
   uniformes.uAtividade.value = atividade;
 
+  const respiracao = estado === ESTADOS.ouvindo ? 0.035 * Math.sin(t * 4) : 0.012 * Math.sin(t * 1.3);
   nucleo.rotation.y += dt * giro;
   nucleo.rotation.x = Math.sin(t * 0.2) * 0.15;
   nucleo.scale.setScalar(1 + respiracao + graveSuave * 0.07);
-  casca.rotation.y -= dt * giro * 0.6;
-  casca.material.opacity = 0.05 + graveSuave * 0.18 + atividade * 0.04;
+  cristal.rotation.x -= dt * (0.3 + giro);
+  cristal.rotation.z += dt * 0.2;
+  arestasCristal.rotation.copy(cristal.rotation);
+  cristal.scale.setScalar(1 + graveSuave * 0.2);
+  arestasCristal.scale.copy(cristal.scale);
+  casca.rotation.y -= dt * giro * 0.5;
+  casca.material.opacity = 0.04 + graveSuave * 0.12 + atividade * 0.03;
 
-  brilho.scale.setScalar(3.2 + graveSuave * 1.4 + atividade * 0.4);
-  brilho.material.opacity = 0.75 + graveSuave * 0.25;
-  brilho.material.color.copy(uniformes.uCor2.value);
+  // HUD sempre de frente para a câmera, com leve inclinação pela posição do mouse.
+  hud.quaternion.copy(camera.quaternion);
+  hud.scale.setScalar(1 + graveSuave * 0.04);
+  camadasHud.forEach((c) => { c.rotation.z += dt * c.userData.velocidade * (1 + atividade * 2.5 + graveSuave * 3); });
+  atualizarEspectro(valoresEspectro);
 
-  aneis.forEach((anel, i) => {
-    anel.rotation.z += dt * anel.userData.velocidade * (1 + atividade * 2 + graveSuave * 4);
-    anel.scale.setScalar(1 + graveSuave * (0.04 + i * 0.02));
-    anel.material.color.copy(uniformes.uCor.value).lerp(uniformes.uCor2.value, 0.3);
+  orbitas.forEach((o, i) => {
+    o.rotation.y += dt * 0.05 * (i ? -1 : 1);
+    const a = t * o.userData.velocidade;
+    o.userData.satelite.position.set(Math.cos(a) * o.userData.raio, Math.sin(a) * o.userData.raio, 0);
   });
-  poeira.rotation.y += dt * 0.01;
+  estrelas.rotation.y += dt * 0.004;
 
   for (let i = ondas.length - 1; i >= 0; i--) {
     const onda = ondas[i];
     onda.userData.idade += dt;
     const p = onda.userData.idade / 0.9;
-    onda.scale.setScalar(1.05 + p * 1.3);
-    onda.material.opacity = (1 - p) * 0.45 * onda.userData.forca;
-    onda.quaternion.copy(camera.quaternion);
+    onda.scale.setScalar(1.05 + p * 1.4);
+    onda.material.opacity = (1 - p) * 0.25 * onda.userData.forca;
     if (p >= 1) {
-      cena.remove(onda);
+      hud.remove(onda);
       onda.geometry.dispose();
       onda.material.dispose();
       ondas.splice(i, 1);
     }
   }
 
+  // Câmera com paralaxe suave + tremor nas batidas.
+  olhar.lerp(mouse, 0.04);
   tremor *= 0.88;
-  camera.position.x = (Math.random() - 0.5) * tremor;
-  camera.position.y = (Math.random() - 0.5) * tremor;
-  camera.lookAt(0, -0.32, 0);
+  camera.position.set(
+    olhar.x * 1.2 + (Math.random() - 0.5) * tremor,
+    -olhar.y * 0.8 + (Math.random() - 0.5) * tremor,
+    distanciaBase
+  );
+  camera.lookAt(0, -0.35, 0);
 
-  renderer.render(cena, camera);
+  composer.render();
   requestAnimationFrame(quadro);
 }
 
-// ---------- Interface ----------
+// ---------- Painéis ----------
 function atualizarRelogio() {
   const agora = new Date();
-  document.getElementById("relogio").textContent =
-    agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  document.getElementById("data").textContent =
-    agora.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  $("relogio").textContent = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  $("data").textContent = agora.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 }
 
+async function atualizarSistema() {
+  try {
+    const s = await api()?.sistema();
+    if (!s) return;
+    for (const chave of ["cpu", "memoria", "disco", "bateria"]) {
+      if (s[chave] === null || s[chave] === undefined) {
+        if (chave === "bateria") $("m-bateria").style.display = "none";
+        continue;
+      }
+      $(`v-${chave}`).textContent = `${Math.round(s[chave])}%${chave === "bateria" && s.carregando ? " ⚡" : ""}`;
+      $(`b-${chave}`).style.width = `${s[chave]}%`;
+    }
+  } catch { /* interface aberta fora do app */ }
+}
+
+let interacoes = 0;
+function registrar(quem, texto) {
+  const lista = $("registro");
+  lista.querySelector(".vazio")?.remove();
+  const ultimo = lista.lastElementChild;
+  if (quem === "jarvis+" && ultimo?.classList.contains("jarvis")) {
+    ultimo.lastChild.textContent += " " + texto;
+    return;
+  }
+  const item = document.createElement("li");
+  item.className = quem === "voce" ? "voce" : "jarvis";
+  const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  item.innerHTML = `<small>${quem === "voce" ? "Você" : "Jarvis"} · ${hora}</small>`;
+  item.append(document.createTextNode(texto));
+  lista.append(item);
+  while (lista.children.length > 7) lista.firstElementChild.remove();
+  if (quem === "voce") $("contador").textContent = String(++interacoes).padStart(2, "0");
+}
+
+// ---------- Ligação com o Python ----------
 function api() {
   return window.pywebview?.api;
 }
 
-document.getElementById("inicio").addEventListener("click", (e) => {
+let iniciado = false;
+function iniciar() {
+  if (iniciado) return;
+  iniciado = true;
+  $("inicio").classList.add("sumindo");
+  api()?.iniciar();
+}
+
+async function aoFicarPronto() {
+  try {
+    const cfg = await api()?.configuracao();
+    if (cfg) efeitoVoz = cfg.efeitoVoz;
+  } catch { /* usa o padrão */ }
   prepararAudio();
-  contexto.resume();
-  e.currentTarget.classList.add("sumindo");
-  const iniciar = () => api()?.iniciar();
-  if (api()) iniciar();
-  else window.addEventListener("pywebviewready", iniciar, { once: true });
-  document.getElementById("entrada").focus();
+  try { await contexto.resume(); } catch { /* sem permissão ainda */ }
+  // Se o navegador deixou tocar áudio sozinho, já inicia; senão, pede um clique.
+  if (contexto.state === "running") iniciar();
+  else $("inicio").classList.add("visivel");
+  atualizarSistema();
+  setInterval(atualizarSistema, 2000);
+}
+
+$("inicio").addEventListener("click", async () => {
+  prepararAudio();
+  await contexto.resume();
+  iniciar();
 });
 
-document.getElementById("barra").addEventListener("submit", (e) => {
+document.querySelectorAll(".controles button").forEach((botao) => {
+  botao.addEventListener("click", () => api()?.[botao.dataset.acao]?.());
+});
+
+$("barra").addEventListener("submit", (e) => {
   e.preventDefault();
-  const entrada = document.getElementById("entrada");
-  const texto = entrada.value.trim();
+  const campo = $("entrada"), texto = campo.value.trim();
   if (!texto) return;
-  entrada.value = "";
+  campo.value = "";
   elConfirmacao.classList.remove("ativa");
+  if (!iniciado) { prepararAudio(); contexto.resume(); iniciar(); }
   api()?.enviar(texto);
 });
 
@@ -392,18 +561,14 @@ elConfirmacao.addEventListener("click", (e) => {
 // Funções chamadas pelo Python (app.py).
 window.jarvis = {
   falar: tocar,
-  falarSemAudio(segundos) {
-    simulacaoAte = relogio.elapsedTime + segundos;
-  },
+  falarSemAudio(segundos) { simulacaoAte = relogio.elapsedTime + segundos; },
   estado(nome) {
     estado = ESTADOS[nome] || ESTADOS.ocioso;
-    corAlvo.set(estado.cor);
-    cor2Alvo.set(estado.cor2);
     elEstado.textContent = estado.rotulo;
     if (nome === "pensando" || nome === "ocioso") elConfirmacao.classList.remove("ativa");
   },
   mensagem(quem, texto) {
-    // "jarvis+" = próxima frase da mesma resposta: entra ao lado da anterior.
+    registrar(quem, texto);
     if (quem === "jarvis+" && elFala.textContent.length + texto.length < 220) {
       const trecho = document.createElement("span");
       trecho.textContent = " " + texto;
@@ -415,9 +580,7 @@ window.jarvis = {
     el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 350 });
     el.textContent = quem === "voce" ? `“${texto}”` : texto;
   },
-  confirmar() {
-    elConfirmacao.classList.add("ativa");
-  },
+  confirmar() { elConfirmacao.classList.add("ativa"); },
 };
 
 window.addEventListener("resize", redimensionar);
@@ -425,3 +588,5 @@ redimensionar();
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);
 quadro();
+if (window.pywebview?.api) aoFicarPronto();
+else window.addEventListener("pywebviewready", aoFicarPronto, { once: true });

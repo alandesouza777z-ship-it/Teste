@@ -3,31 +3,15 @@
 import datetime
 import os
 import platform
-import shutil
 import subprocess
 import webbrowser
 
+from . import aplicativos, controle
+from .aplicativos import abrir_programa
+from .base import _schema
 from .confirmacao import confirmar
 
 SISTEMA = platform.system()  # "Windows", "Darwin" (macOS) ou "Linux"
-
-
-def abrir_programa(nome: str) -> str:
-    try:
-        if SISTEMA == "Windows":
-            # "start" acha programas registrados (chrome, spotify, notepad, calc...)
-            subprocess.Popen(f'start "" "{nome}"', shell=True)
-        elif SISTEMA == "Darwin":
-            subprocess.Popen(["open", "-a", nome])
-        else:
-            executavel = shutil.which(nome) or shutil.which(nome.lower())
-            if executavel:
-                subprocess.Popen([executavel])
-            else:
-                subprocess.Popen(["gtk-launch", nome.lower()])
-        return f"Abrindo {nome}."
-    except Exception as erro:
-        return f"Não consegui abrir {nome}: {erro}"
 
 
 def abrir_site(url: str) -> str:
@@ -67,13 +51,6 @@ def midia(acao: str) -> str:
         return "Ação inválida."
     pyautogui.press(teclas[acao])
     return f"Mídia: {acao}."
-
-
-def digitar_texto(texto: str) -> str:
-    import pyautogui
-
-    pyautogui.write(texto, interval=0.02)
-    return "Texto digitado."
 
 
 def tirar_print() -> str:
@@ -119,21 +96,43 @@ def executar_comando(comando: str) -> str:
         return "O comando demorou mais de 60 segundos e foi interrompido."
 
 
-def _schema(nome, descricao, propriedades=None, obrigatorios=None):
-    return {
-        "name": nome,
-        "description": descricao,
-        "input_schema": {
-            "type": "object",
-            "properties": propriedades or {},
-            "required": obrigatorios or [],
-        },
-    }
-
-
 FERRAMENTAS = [
-    (_schema("abrir_programa", "Abre um programa instalado no computador (ex.: chrome, spotify, notepad, calculadora, vscode).",
-             {"nome": {"type": "string", "description": "Nome do programa/executável."}}, ["nome"]), abrir_programa),
+    (_schema("abrir_programa",
+             "Abre QUALQUER aplicativo instalado pelo nome como aparece no menu Iniciar "
+             "(ex.: WhatsApp, Spotify, OBS Studio, Obsidian, Claude, Discord, Microsoft Edge, Steam).",
+             {"nome": {"type": "string", "description": "Nome do aplicativo."}}, ["nome"]), abrir_programa),
+    (_schema("listar_aplicativos", "Lista os aplicativos instalados (opcionalmente filtrando pelo nome).",
+             {"filtro": {"type": "string"}}), aplicativos.listar_aplicativos),
+    (_schema("fechar_programa", "Fecha um aplicativo aberto (pede para fechar normalmente).",
+             {"nome": {"type": "string"}}, ["nome"]), aplicativos.fechar_programa),
+    (_schema("listar_programas_abertos", "Lista as janelas abertas no computador."),
+     aplicativos.listar_programas_abertos),
+    (_schema("focar_janela", "Traz para a frente uma janela aberta pelo título (ex.: 'Spotify', 'WhatsApp').",
+             {"titulo": {"type": "string"}}, ["titulo"]), aplicativos.focar_janela),
+    (_schema("controlar_janela", "Maximiza, minimiza, fecha, encaixa ou alterna a janela da frente; "
+             "ou mostra a área de trabalho.",
+             {"acao": {"type": "string", "enum": ["maximizar", "minimizar", "fechar", "mostrar_area_de_trabalho",
+                                                  "alternar", "lado_esquerdo", "lado_direito"]}}, ["acao"]),
+     aplicativos.controlar_janela),
+    (_schema("ver_tela",
+             "Tira uma foto da tela para você enxergar o que está aberto. Use antes de clicar em algo, "
+             "para navegar em apps e sites, ou quando o usuário perguntar o que está na tela."),
+     controle.ver_tela),
+    (_schema("clicar", "Clica num ponto da tela, usando as coordenadas da última imagem de ver_tela.",
+             {"x": {"type": "integer"}, "y": {"type": "integer"},
+              "botao": {"type": "string", "enum": ["esquerdo", "direito", "meio"]},
+              "duplo": {"type": "boolean"}}, ["x", "y"]), controle.clicar),
+    (_schema("pressionar_teclas", "Pressiona uma tecla ou atalho, ex.: 'enter', 'ctrl+t', 'ctrl+w', 'win+d', 'space'.",
+             {"teclas": {"type": "string"}}, ["teclas"]), controle.pressionar_teclas),
+    (_schema("rolar", "Rola a página/janela da frente.",
+             {"direcao": {"type": "string", "enum": ["cima", "baixo"]}, "quantidade": {"type": "integer"}}),
+     controle.rolar),
+    (_schema("abrir_caminho", "Abre uma pasta ou arquivo: caminho completo ou nomes como "
+             "'downloads', 'documentos', 'área de trabalho', 'imagens'.",
+             {"caminho": {"type": "string"}}, ["caminho"]), controle.abrir_caminho),
+    (_schema("procurar_arquivos", "Procura arquivos ou pastas pelo nome na pasta do usuário.",
+             {"nome": {"type": "string"}, "pasta": {"type": "string", "description": "Opcional: downloads, documentos..."}},
+             ["nome"]), controle.procurar_arquivos),
     (_schema("abrir_site", "Abre um site no navegador padrão.",
              {"url": {"type": "string"}}, ["url"]), abrir_site),
     (_schema("pesquisar_no_navegador", "Abre uma pesquisa no Google ou YouTube no navegador para o usuário ver.",
@@ -145,8 +144,8 @@ FERRAMENTAS = [
      controlar_volume),
     (_schema("midia", "Teclas de mídia do sistema: tocar/pausar, próxima, anterior (qualquer player).",
              {"acao": {"type": "string", "enum": ["tocar_pausar", "proxima", "anterior"]}}, ["acao"]), midia),
-    (_schema("digitar_texto", "Digita um texto onde o cursor estiver.",
-             {"texto": {"type": "string"}}, ["texto"]), digitar_texto),
+    (_schema("digitar_texto", "Digita um texto onde o cursor estiver (aceita acentos).",
+             {"texto": {"type": "string"}}, ["texto"]), controle.digitar_texto),
     (_schema("tirar_print", "Tira uma captura de tela e salva na pasta Imagens."), tirar_print),
     (_schema("info_sistema", "Mostra uso de CPU, memória, disco e bateria."), info_sistema),
     (_schema("data_hora", "Data e hora atuais do computador."), data_hora),

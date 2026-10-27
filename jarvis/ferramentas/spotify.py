@@ -1,11 +1,15 @@
 """Controle do Spotify pela Web API (precisa de conta Premium para controlar a reprodução)."""
 
 import os
+import platform
 import time
+import webbrowser
+from urllib.parse import quote
 
 from config import PASTA_USUARIO
 
-from .computador import _schema, abrir_programa
+from .aplicativos import abrir_programa
+from .base import _schema
 
 ESCOPOS = "user-modify-playback-state user-read-playback-state user-read-currently-playing"
 _cliente = None
@@ -49,22 +53,46 @@ def _seguro(funcao):
     return envolvida
 
 
-@_seguro
+def _abrir_uri(uri: str) -> None:
+    """Abre um link spotify:... direto no aplicativo do Spotify."""
+    if platform.system() == "Windows":
+        os.startfile(uri)
+    else:
+        webbrowser.open(uri)
+
+
 def tocar_spotify(busca: str, tipo: str = "musica") -> str:
-    sp = _sp()
     tipos = {"musica": "track", "artista": "artist", "album": "album", "playlist": "playlist"}
     tipo_api = tipos.get(tipo, "track")
-    resultado = sp.search(q=busca, type=tipo_api, limit=1, market="BR")
-    itens = [i for i in resultado[tipo_api + "s"]["items"] if i]
-    if not itens:
-        return f"Não encontrei '{busca}' no Spotify."
-    item = itens[0]
-    dispositivo = _dispositivo()
-    if tipo_api == "track":
-        sp.start_playback(device_id=dispositivo, uris=[item["uri"]])
-        return f"Tocando {item['name']} de {item['artists'][0]['name']}."
-    sp.start_playback(device_id=dispositivo, context_uri=item["uri"])
-    return f"Tocando {tipo} {item['name']}."
+    item = None
+    if os.getenv("SPOTIPY_CLIENT_ID"):
+        try:
+            sp = _sp()
+            resultado = sp.search(q=busca, type=tipo_api, limit=1, market="BR")
+            itens = [i for i in resultado[tipo_api + "s"]["items"] if i]
+            if not itens:
+                return f"Não encontrei '{busca}' no Spotify."
+            item = itens[0]
+            dispositivo = _dispositivo()
+            if tipo_api == "track":
+                sp.start_playback(device_id=dispositivo, uris=[item["uri"]])
+                return f"Tocando {item['name']} de {item['artists'][0]['name']}."
+            sp.start_playback(device_id=dispositivo, context_uri=item["uri"])
+            return f"Tocando {tipo} {item['name']}."
+        except Exception as erro:
+            print(f"Spotify pela API falhou ({erro}); abrindo no aplicativo.")
+
+    # Sem API (ou sem Premium): abre direto no aplicativo do Spotify.
+    if item:
+        _abrir_uri(item["uri"])
+        aberto = f"a página de '{item['name']}'"
+    else:
+        _abrir_uri("spotify:search:" + quote(busca))
+        aberto = f"a busca por '{busca}'"
+    time.sleep(3)
+    return (f"Abri {aberto} no aplicativo do Spotify, mas ainda não dei play. Agora use ver_tela, "
+            "encontre o resultado certo e clique no botão de play (passe o mouse/clique no primeiro "
+            "resultado ou no botão verde). Confira com ver_tela se começou a tocar.")
 
 
 @_seguro

@@ -1,12 +1,13 @@
-"""J.A.R.V.I.S. — aplicativo com interface: janela preta e esfera 3D que reage à voz.
+"""J.A.R.V.I.S. — aplicativo com interface: janela sem bordas e esfera 3D que reage à voz.
 
 Uso:
     python app.py
 
 A fala é tocada pela própria interface, que analisa o áudio em tempo real para
-fazer a esfera pulsar com os graves.
+fazer a esfera e o espectro reagirem à voz.
 """
 
+import atexit
 import base64
 import json
 import os
@@ -15,9 +16,16 @@ import threading
 
 import config  # carrega o .env antes dos outros módulos
 
+# Deixa a interface tocar a voz sem precisar de um clique (o JARVIS pode abrir pelas palmas).
+os.environ.setdefault("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-policy=no-user-gesture-required")
+
 import webview  # noqa: E402
 
 from assistente import Assistente  # noqa: E402
+from ferramentas import aplicativos  # noqa: E402
+
+ARQUIVO_PID = os.path.join(config.PASTA_USUARIO, ".jarvis.pid")
+EFEITO_VOZ = os.getenv("JARVIS_EFEITO_VOZ", "1") != "0"
 
 janela = None
 assistente = None
@@ -34,7 +42,7 @@ def tocar_na_interface(audio: bytes) -> None:
     fala_terminou.clear()
     _js("falar", base64.b64encode(audio).decode())
     # A interface avisa quando o áudio acaba; o limite evita travar se algo falhar.
-    # (edge-tts gera MP3 a 48 kbps: ~6000 bytes por segundo de fala.)
+    # (MP3 de voz tem pelo menos ~6000 bytes por segundo.)
     fala_terminou.wait(timeout=len(audio) / 6000 + 3)
 
 
@@ -46,8 +54,21 @@ def falar_offline_na_interface(texto: str) -> None:
     voz.falar_offline(texto)
 
 
+def _registrar_aberto() -> None:
+    """Avisa o detector de palmas que o JARVIS está aberto (ele para de ouvir palmas)."""
+    try:
+        with open(ARQUIVO_PID, "w") as arquivo:
+            arquivo.write(str(os.getpid()))
+        atexit.register(lambda: os.path.exists(ARQUIVO_PID) and os.remove(ARQUIVO_PID))
+    except OSError:
+        pass
+
+
 class Api:
     """Funções que a interface (JavaScript) pode chamar via window.pywebview.api."""
+
+    def configuracao(self):
+        return {"efeitoVoz": EFEITO_VOZ}
 
     def iniciar(self):
         global assistente
@@ -73,17 +94,43 @@ class Api:
     def audio_terminou(self):
         fala_terminou.set()
 
+    def sistema(self):
+        """Números para o painel de sistema da interface."""
+        import psutil
+
+        bateria = psutil.sensors_battery()
+        return {
+            "cpu": psutil.cpu_percent(),
+            "memoria": psutil.virtual_memory().percent,
+            "disco": psutil.disk_usage(os.path.expanduser("~")).percent,
+            "bateria": round(bateria.percent) if bateria else None,
+            "carregando": bool(bateria and bateria.power_plugged),
+        }
+
+    def minimizar(self):
+        janela.minimize()
+
+    def maximizar(self):
+        janela.toggle_fullscreen()
+
+    def fechar(self):
+        janela.destroy()
+
 
 def main() -> None:
     global janela
+    _registrar_aberto()
+    aplicativos.preparar()
     janela = webview.create_window(
         "J.A.R.V.I.S.",
         os.path.join(config.PASTA_PROGRAMA, "web", "index.html"),
         js_api=Api(),
-        width=1200,
-        height=800,
-        min_size=(700, 500),
+        width=1280,
+        height=820,
+        min_size=(760, 540),
         background_color="#000000",
+        frameless=True,
+        easy_drag=False,
     )
     webview.start(debug="--debug" in sys.argv)
 

@@ -4,82 +4,145 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>J.A.R.V.I.S.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+<script type="importmap">{ "imports": { "three": "./three.module.min.js" } }</script>
 <style>
   :root {
     --fundo: #000;
-    --destaque: #ffffff;
-    --destaque-fraco: rgba(255, 255, 255, 0.45);
-    --texto: #f2f2f2;
-    --apagado: rgba(255, 255, 255, 0.45);
+    --branco: #ffffff;
+    --texto: #ededed;
+    --suave: rgba(255, 255, 255, 0.55);
+    --apagado: rgba(255, 255, 255, 0.32);
+    --linha: rgba(255, 255, 255, 0.12);
+    --vidro: rgba(255, 255, 255, 0.035);
+    --hud: "Rajdhani", "Segoe UI", sans-serif;
+    --corpo: "Inter", "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--fundo); color: var(--texto); overflow: hidden;
-    font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif; user-select: none; }
+    font-family: var(--corpo); user-select: none; -webkit-font-smoothing: antialiased; }
   canvas { position: fixed; inset: 0; display: block; }
 
-  .hud { position: fixed; pointer-events: none; letter-spacing: .28em; font-size: 12px;
-    text-transform: uppercase; color: var(--destaque-fraco); }
-  .hud.topo-esq { top: 22px; left: 28px; }
-  .hud.topo-dir { top: 22px; right: 28px; text-align: right; }
-  .hud .titulo { color: var(--destaque); font-size: 15px; font-weight: 600; letter-spacing: .5em; }
-  .hud .linha { margin-top: 6px; }
+  /* Vinheta cinematográfica */
+  .vinheta { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0,0,0,.55) 80%, #000 100%); }
 
-  #estado { position: fixed; left: 50%; bottom: 168px; transform: translateX(-50%);
-    font-size: 11px; letter-spacing: .5em; color: var(--destaque); text-transform: uppercase;
-    pointer-events: none; transition: opacity .3s; }
+  /* Barra de título (janela sem bordas) */
+  #titulo { position: fixed; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 8px 0 22px; z-index: 10; }
+  .marca { font-family: var(--hud); font-weight: 600; letter-spacing: .55em; font-size: 13px; color: var(--branco);
+    display: flex; align-items: center; gap: 14px; pointer-events: none; }
+  .marca .ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--branco);
+    box-shadow: 0 0 10px var(--branco); animation: pulsar 2.4s ease-in-out infinite; }
+  .marca small { font-weight: 500; letter-spacing: .35em; font-size: 10px; color: var(--apagado); }
+  .controles { display: flex; gap: 2px; }
+  .controles button { width: 42px; height: 30px; border: 0; background: transparent; color: var(--suave);
+    cursor: pointer; border-radius: 6px; display: grid; place-items: center; transition: background .15s, color .15s; }
+  .controles button:hover { background: rgba(255,255,255,.08); color: var(--branco); }
+  .controles button.fechar:hover { background: rgba(255,255,255,.9); color: #000; }
+  .controles svg { width: 12px; height: 12px; stroke: currentColor; stroke-width: 1.4; fill: none; }
 
-  #sombra { position: fixed; left: 0; right: 0; bottom: 0; height: 260px; pointer-events: none;
-    background: linear-gradient(to top, rgba(0,0,0,.92) 35%, rgba(0,0,0,0)); }
+  /* Painéis de vidro */
+  .painel { position: fixed; top: 76px; width: 236px; padding: 18px 18px 16px; border: 1px solid var(--linha);
+    background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.015));
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06); }
+  .painel.esq { left: 26px; }
+  .painel.dir { right: 26px; }
+  .painel h2 { font-family: var(--hud); font-weight: 600; font-size: 11px; letter-spacing: .4em; color: var(--suave);
+    display: flex; justify-content: space-between; margin-bottom: 16px; }
+  .painel h2 span { color: var(--apagado); letter-spacing: .1em; font-weight: 500; }
+  .medida { margin-bottom: 13px; }
+  .medida .rotulo { display: flex; justify-content: space-between; font-family: var(--hud); font-size: 12px;
+    letter-spacing: .18em; color: var(--suave); margin-bottom: 6px; }
+  .medida .rotulo b { color: var(--branco); font-weight: 500; letter-spacing: .05em; font-variant-numeric: tabular-nums; }
+  .barra-medida { height: 3px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+  .barra-medida i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, rgba(255,255,255,.5), #fff);
+    box-shadow: 0 0 8px rgba(255,255,255,.7); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+  .relogio { font-family: var(--hud); font-size: 40px; font-weight: 500; letter-spacing: .08em; color: var(--branco);
+    line-height: 1; margin: 4px 0 4px; font-variant-numeric: tabular-nums; }
+  .data { font-family: var(--hud); font-size: 11px; letter-spacing: .3em; color: var(--apagado); text-transform: uppercase;
+    margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--linha); }
+
+  #registro { list-style: none; display: flex; flex-direction: column; gap: 11px; max-height: 330px; overflow: hidden; }
+  #registro li { font-size: 12.5px; line-height: 1.45; color: var(--suave); border-left: 1px solid var(--linha);
+    padding-left: 10px; animation: entrar .4s ease both; }
+  #registro li.jarvis { color: var(--texto); border-left-color: rgba(255,255,255,.6); }
+  #registro li small { display: block; font-family: var(--hud); letter-spacing: .25em; font-size: 9.5px;
+    color: var(--apagado); margin-bottom: 2px; text-transform: uppercase; }
+  #registro .vazio { border: 0; padding: 0; color: var(--apagado); font-style: italic; }
+
+  /* Centro inferior */
+  #estado { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); font-family: var(--hud);
+    font-size: 12px; font-weight: 500; letter-spacing: .6em; margin-right: -.6em; color: var(--branco);
+    text-transform: uppercase; pointer-events: none; text-shadow: 0 0 12px rgba(255,255,255,.6); }
   #legendas { position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%);
-    width: min(820px, calc(100% - 32px)); text-align: center; pointer-events: none; }
-  #voce { color: var(--apagado); font-size: 14px; min-height: 20px; }
-  #fala { margin-top: 8px; font-size: 19px; line-height: 1.45; min-height: 28px;
-    text-shadow: 0 0 18px rgba(255, 255, 255, .25); }
-
-  #barra { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-    width: min(560px, calc(100% - 32px)); display: flex; gap: 10px; }
-  #entrada { flex: 1; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .2);
-    color: var(--texto); padding: 11px 16px; border-radius: 22px; font-size: 14px; outline: none;
-    user-select: text; transition: border-color .2s; }
-  #entrada:focus { border-color: var(--destaque); }
+    width: min(780px, calc(100% - 32px)); text-align: center; pointer-events: none; }
+  #voce { color: var(--apagado); font-size: 13px; min-height: 18px; font-style: italic; }
+  #fala { margin-top: 6px; font-size: 18px; font-weight: 300; line-height: 1.5; min-height: 27px; color: var(--branco);
+    text-shadow: 0 0 22px rgba(255,255,255,.25); }
+  #barra { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(520px, calc(100% - 32px)); }
+  #entrada { width: 100%; background: var(--vidro); border: 1px solid var(--linha); color: var(--texto);
+    padding: 12px 20px; border-radius: 24px; font: 400 14px var(--corpo); outline: none; user-select: text;
+    backdrop-filter: blur(10px); transition: border-color .2s, box-shadow .2s; }
+  #entrada:focus { border-color: rgba(255,255,255,.45); box-shadow: 0 0 24px rgba(255,255,255,.08); }
   #entrada::placeholder { color: var(--apagado); }
 
-  #confirmacao { position: fixed; left: 50%; bottom: 220px; transform: translateX(-50%);
-    display: none; gap: 14px; }
-  #confirmacao.ativa { display: flex; }
-  .botao { background: transparent; border: 1px solid var(--destaque); color: var(--destaque);
-    padding: 9px 26px; border-radius: 20px; letter-spacing: .3em; font-size: 12px; cursor: pointer; }
-  .botao:hover { background: rgba(255, 255, 255, .1); }
+  #confirmacao { position: fixed; left: 50%; bottom: 196px; transform: translateX(-50%); display: none; gap: 14px; }
+  #confirmacao.ativa { display: flex; animation: entrar .3s ease both; }
+  .botao { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.55); color: var(--branco);
+    padding: 9px 30px; border-radius: 20px; font: 600 12px var(--hud); letter-spacing: .35em; cursor: pointer;
+    backdrop-filter: blur(8px); }
+  .botao:hover { background: var(--branco); color: #000; }
 
-  #inicio { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 26px; background: rgba(0, 0, 0, .55); cursor: pointer;
-    transition: opacity .8s; z-index: 5; }
+  #inicio { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 26px; background: rgba(0,0,0,.6); cursor: pointer; z-index: 20; transition: opacity .8s; }
+  #inicio.visivel { display: flex; }
   #inicio.sumindo { opacity: 0; pointer-events: none; }
-  #inicio h1 { font-weight: 300; letter-spacing: .8em; font-size: 34px; margin-right: -.8em; color: var(--destaque);
-    text-shadow: 0 0 24px rgba(255, 255, 255, .45); }
-  #inicio p { letter-spacing: .45em; font-size: 12px; color: var(--apagado); text-transform: uppercase;
-    animation: piscar 2s ease-in-out infinite; }
-  @media (max-width: 760px) { .hud .linha { display: none; } }
-  @keyframes piscar { 50% { opacity: .35; } }
+  #inicio h1 { font: 500 34px var(--hud); letter-spacing: .8em; margin-right: -.8em; color: var(--branco);
+    text-shadow: 0 0 30px rgba(255,255,255,.5); }
+  #inicio p { font: 500 12px var(--hud); letter-spacing: .45em; color: var(--apagado); text-transform: uppercase;
+    animation: pulsar 2s ease-in-out infinite; }
+
+  @keyframes pulsar { 50% { opacity: .35; } }
+  @keyframes entrar { from { opacity: 0; transform: translateY(6px); } }
+  @media (max-width: 1080px) { .painel { display: none; } }
 </style>
 </head>
 <body>
   <canvas id="cena"></canvas>
+  <div class="vinheta"></div>
 
-  <div class="hud topo-esq">
-    <div class="titulo">J.A.R.V.I.S.</div>
-    <div class="linha">Just A Rather Very Intelligent System</div>
-  </div>
-  <div class="hud topo-dir">
-    <div class="titulo" id="relogio">--:--</div>
-    <div class="linha" id="data"></div>
-  </div>
+  <header id="titulo" class="pywebview-drag-region">
+    <div class="marca"><span class="ponto"></span>J.A.R.V.I.S. <small>ONLINE</small></div>
+    <div class="controles">
+      <button data-acao="minimizar" title="Minimizar"><svg viewBox="0 0 12 12"><path d="M1 6h10"/></svg></button>
+      <button data-acao="maximizar" title="Tela cheia"><svg viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9"/></svg></button>
+      <button data-acao="fechar" class="fechar" title="Fechar"><svg viewBox="0 0 12 12"><path d="M1.5 1.5l9 9M10.5 1.5l-9 9"/></svg></button>
+    </div>
+  </header>
 
-  <div id="sombra"></div>
-  <div id="estado">aguardando</div>
+  <aside class="painel esq">
+    <div class="relogio" id="relogio">--:--</div>
+    <div class="data" id="data"></div>
+    <h2>SISTEMA <span>AO VIVO</span></h2>
+    <div class="medida"><div class="rotulo">PROCESSADOR <b id="v-cpu">--</b></div><div class="barra-medida"><i id="b-cpu"></i></div></div>
+    <div class="medida"><div class="rotulo">MEMÓRIA <b id="v-memoria">--</b></div><div class="barra-medida"><i id="b-memoria"></i></div></div>
+    <div class="medida"><div class="rotulo">DISCO <b id="v-disco">--</b></div><div class="barra-medida"><i id="b-disco"></i></div></div>
+    <div class="medida" id="m-bateria"><div class="rotulo">BATERIA <b id="v-bateria">--</b></div><div class="barra-medida"><i id="b-bateria"></i></div></div>
+  </aside>
+
+  <aside class="painel dir">
+    <h2>REGISTRO <span id="contador">00</span></h2>
+    <ul id="registro"><li class="vazio">Nenhuma interação ainda.</li></ul>
+  </aside>
+
+  <div id="estado">inicializando</div>
   <div id="confirmacao">
-    <button class="botao" data-resposta="sim">Sim</button>
-    <button class="botao" data-resposta="não">Não</button>
+    <button class="botao" data-resposta="sim">SIM</button>
+    <button class="botao" data-resposta="não">NÃO</button>
   </div>
   <div id="legendas">
     <div id="voce"></div>

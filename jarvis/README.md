@@ -11,24 +11,34 @@ Exemplos do que você pode dizer:
 - "Jarvis, abre o Chrome" / "Jarvis, aumenta o volume" / "Jarvis, tira um print"
 - "Jarvis, como está o computador?" (CPU, memória, bateria)
 - "Jarvis, qual a cotação do dólar hoje?" (pesquisa na web)
+- "Jarvis, abre o OBS" / "Jarvis, fecha o Edge" / "Jarvis, vai para o WhatsApp"
+- "Jarvis, abre a pasta Downloads" / "Jarvis, o que tem na minha tela?"
 - "Jarvis, desligar" encerra o assistente.
 
 Depois que ele responde, você tem alguns segundos para continuar a conversa sem dizer "Jarvis" de novo.
 
 ## O aplicativo
 
-Visual todo em **preto e branco**: uma **esfera 3D de partículas** no centro, anéis orbitais e um relógio.
-A esfera muda conforme o que o JARVIS está fazendo:
+Janela sem bordas, em preto e branco, com brilho cinematográfico:
 
-- **aguardando**: respira devagar;
-- **ouvindo**: fica mais clara e pulsa mais rápido;
-- **processando**: escurece e gira mais rápido;
-- **falando**: se deforma com os **graves da voz** em tempo real. Cada batida de grave solta uma
-  onda de choque e dá um leve tremor na câmera.
+- **núcleo 3D**: esfera de 14 mil partículas com um cristal luminoso no centro;
+- **HUD estilo Homem de Ferro**: anéis com marcações girando, órbitas em 3D e campo de estrelas;
+- **espectro de áudio** em volta da esfera, que reage à voz do JARVIS;
+- **painel de sistema** (relógio, processador, memória, disco, bateria) e **registro** das conversas;
+- a câmera acompanha levemente o mouse, dando profundidade.
 
-Embaixo aparecem as legendas (o que você disse e o que ele respondeu) e uma caixa para digitar
-pedidos. Quando ele pede confirmação, surgem os botões **Sim** e **Não** (também dá para responder
-falando).
+A esfera muda conforme o estado: aguardando, ouvindo (mais clara), processando (gira rápido) e
+falando (deforma com os graves, com ondas de choque nas batidas).
+
+## Abrir com palmas
+
+Bata **duas palmas** e o JARVIS abre. O detector (`JARVIS-Palmas.exe`) roda escondido e inicia
+junto com o Windows. Enquanto o JARVIS está aberto, ele não ouve palmas e solta o microfone.
+
+- Não reconhece suas palmas? Aumente `JARVIS_PALMAS_SENSIBILIDADE` no `.env` (ex.: `1.5`).
+- Abre sozinho com barulhos? Diminua (ex.: `0.7`).
+- Para testar os níveis: `python palmas.py --teste`.
+- Para desligar de vez: `desligar_palmas.bat`.
 
 ### Instalar como aplicativo no Windows
 
@@ -92,27 +102,41 @@ oficial para contas pessoais).
 
 ## A voz
 
-A voz padrão é a `pt-BR-AntonioNeural` (Microsoft, gratuita). Para ouvir outras opções, rode
-`python testar_vozes.py` e coloque a escolhida em `JARVIS_VOZ` no `.env`. As vozes
-"Multilingual" são as mais naturais. A personalidade (educado, irônico, te chama de "senhor")
-está em `cerebro.py`.
+A voz tem um **efeito JARVIS**: presença nítida, leve dobra metálica e ambiente curto de sala,
+inspirado no assistente do filme. Desligue com `JARVIS_EFEITO_VOZ=0`.
 
-Para soar natural, o JARVIS:
-- tira vírgulas e travessões antes de falar, então não faz pausa a cada vírgula;
-- começa a falar assim que a primeira frase da resposta fica pronta, e gera a próxima enquanto
-  fala a atual;
-- avisa "Um momento, senhor." antes de pesquisar na internet.
+- **Grátis (padrão):** vozes neurais da Microsoft. Rode `python testar_vozes.py` para comparar e
+  coloque a escolhida em `JARVIS_VOZ`.
+- **Premium (ElevenLabs, pago):** voz muito mais humana. Crie uma conta em elevenlabs.io, escolha
+  na biblioteca uma voz grave de "mordomo britânico" e coloque `ELEVENLABS_API_KEY` e
+  `ELEVENLABS_VOZ` no `.env`.
 
-A voz do ator do filme não está incluída: ela pertence ao ator e ao estúdio.
+A voz do ator do filme (e do dublador brasileiro) não pode ser copiada: ela pertence a eles.
 
 ## Entender a sua voz
 
-- A palavra "Jarvis" é reconhecida mesmo quando o reconhecimento entende errado ("Jarbas",
-  "Javis", "Jarvas"...).
-- O JARVIS recebe as várias interpretações possíveis do que você falou e o Claude interpreta
-  pelo som e pelo contexto (por exemplo "bequi in bléqui" vira "Back in Black").
-- Fale normalmente, perto do microfone. Depois que ele responde, você tem 8 segundos para
-  continuar sem dizer "Jarvis" de novo.
+O JARVIS usa o **Whisper** (da OpenAI, código aberto), que roda **no seu computador**: entende
+português muito melhor que o reconhecimento gratuito do Google e não precisa de internet para isso.
+
+- Na primeira vez ele baixa o modelo (~500 MB). Até terminar, usa o Google.
+- O microfone fica aberto o tempo todo e ele espera ~1 segundo de silêncio antes de considerar que
+  você terminou: frases não são mais cortadas no meio.
+- Ele conhece nomes como Spotify, WhatsApp, OBS, Obsidian e Claude, e entende "Jarvis" mesmo
+  quando ouve "Jarbas" ou "Javis".
+- PC lento? Use `JARVIS_WHISPER_MODELO=base` no `.env`. PC forte? `medium` é ainda mais preciso.
+
+## Controle do computador
+
+O JARVIS pode:
+
+- abrir **qualquer aplicativo instalado** (ele lê a lista do menu Iniciar, incluindo apps da
+  Microsoft Store como WhatsApp, Spotify e Claude);
+- fechar programas, alternar entre janelas, maximizar, minimizar e mostrar a área de trabalho;
+- **enxergar a tela**, clicar, digitar (com acentos), usar atalhos e rolar páginas, para navegar
+  dentro de apps e sites e conferir se a tarefa deu certo;
+- abrir pastas e arquivos e procurar arquivos pelo nome.
+
+Comandos de terminal e mensagens de WhatsApp continuam pedindo confirmação.
 
 ## Segurança
 
@@ -132,7 +156,10 @@ A voz do ator do filme não está incluída: ela pertence ao ator e ao estúdio.
 | `instalar_windows.bat` / `instalar_mac_linux.sh` | Geram o aplicativo e o atalho |
 | `voz.py` | Ouvir (microfone → texto) e falar (texto → voz) |
 | `cerebro.py` | Personalidade do JARVIS e conversa com o Claude |
-| `ferramentas/computador.py` | Programas, sites, volume, mídia, print, sistema, comandos |
+| `palmas.py` | Detector de palmas que abre o JARVIS |
+| `ferramentas/aplicativos.py` | Abrir, fechar e alternar aplicativos |
+| `ferramentas/controle.py` | Ver a tela, clicar, teclas, pastas e arquivos |
+| `ferramentas/computador.py` | Sites, volume, mídia, print, sistema, comandos |
 | `ferramentas/spotify.py` | Tocar, pausar, pular, volume, música atual |
 | `ferramentas/whatsapp.py` | Enviar mensagens e abrir conversas |
 

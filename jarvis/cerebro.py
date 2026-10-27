@@ -11,6 +11,7 @@ import ferramentas
 
 MODELO = "claude-haiku-5-5"
 NOME_USUARIO = os.getenv("JARVIS_NOME_USUARIO", "senhor")
+MAX_PASSOS = 25  # limite de ações seguidas num mesmo pedido
 NOVA_CONVERSA_APOS = 5 * 60  # segundos parado até começar uma conversa nova (mantém as respostas rápidas)
 
 PERSONALIDADE = f"""Você é J.A.R.V.I.S., o assistente pessoal de inteligência artificial do usuário, \
@@ -30,10 +31,17 @@ Suas respostas são faladas em voz alta, então fale como numa conversa de verda
 - Nunca use markdown, listas, emojis, links ou código.
 - Arredonde números e resuma dados ("o processador está tranquilo") em vez de ler valores técnicos.
 
-Você controla o computador, o Spotify e o WhatsApp do usuário pelas ferramentas disponíveis, \
-e pode pesquisar na web para informações atuais. Quando o pedido for claro, aja direto e depois \
-confirme em poucas palavras ("Feito, {NOME_USUARIO}."). Antes de pesquisar na web, diga uma frase \
-bem curta como "Um momento, {NOME_USUARIO}." para ele saber que você está trabalhando. \
+Você tem acesso amplo ao computador do usuário (Windows) e deve usá-lo com autonomia:
+- Abra qualquer aplicativo instalado com abrir_programa (WhatsApp, Spotify, OBS Studio, Obsidian, Claude, \
+Discord...). Se não achar, use listar_aplicativos para descobrir o nome exato e tente de novo.
+- Para navegar dentro de apps e sites, use ver_tela para enxergar a tela e depois clicar, digitar_texto, \
+pressionar_teclas e rolar. Depois de cada ação importante, confira com ver_tela se deu certo e corrija \
+sozinho se não deu. Encadeie quantas ações forem necessárias para concluir o pedido.
+- Para alternar entre programas use focar_janela; para fechar use fechar_programa.
+- Para tocar músicas use tocar_spotify; se ele disser que só abriu a busca, termine o serviço pela tela.
+Quando o pedido for claro, aja direto e depois confirme em poucas palavras ("Feito, {NOME_USUARIO}."). \
+Antes de tarefas que levam tempo (pesquisar na web, navegar pela tela), diga uma frase bem curta como \
+"Um momento, {NOME_USUARIO}." para ele saber que você está trabalhando. \
 Ações sensíveis (comandos de terminal, envio de mensagens) já pedem confirmação ao usuário \
 automaticamente; não peça de novo."""
 
@@ -101,7 +109,7 @@ class Cerebro:
             del self.historico[tamanho_antes:]
             ao_falar(mensagem)
 
-        while True:
+        for _ in range(MAX_PASSOS):
             try:
                 resposta = self._transmitir(ao_falar)
             except anthropic.AuthenticationError:
@@ -136,8 +144,9 @@ class Cerebro:
                     erro = False
                 except Exception as exc:
                     conteudo, erro = f"Erro: {exc}", True
-                print(f"  [{bloco.name}] {conteudo}")
+                print(f"  [{bloco.name}] {conteudo if isinstance(conteudo, str) else '(imagem da tela)'}")
                 resultados.append(
                     {"type": "tool_result", "tool_use_id": bloco.id, "content": conteudo, "is_error": erro}
                 )
             self.historico.append({"role": "user", "content": resultados})
+        ao_falar("Essa tarefa está mais longa do que eu esperava, senhor. Parei por aqui por segurança.")

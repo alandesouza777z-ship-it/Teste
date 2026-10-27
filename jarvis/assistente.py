@@ -85,7 +85,7 @@ class Assistente:
 
     # ---------- Escuta ----------
 
-    def _ouvir(self, tempo_limite, limite_frase=15) -> list[str]:
+    def _ouvir(self, tempo_limite, limite_frase=25) -> list[str]:
         if not self.microfone:
             return []
         try:
@@ -104,7 +104,7 @@ class Assistente:
             try:
                 resposta = self.fila.get_nowait()
             except queue.Empty:
-                alternativas = self._ouvir(tempo_limite=2, limite_frase=5)
+                alternativas = self._ouvir(tempo_limite=2, limite_frase=8)
                 resposta = alternativas[0] if alternativas else ""
                 if not self.microfone:
                     time.sleep(0.2)
