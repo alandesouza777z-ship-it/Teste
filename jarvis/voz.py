@@ -35,7 +35,7 @@ ALUCINACOES = ("legendas pela comunidade", "amara.org", "obrigado por assistir",
 
 _reconhecedor = sr.Recognizer()
 _reconhecedor.dynamic_energy_threshold = True   # se adapta ao barulho do ambiente
-_reconhecedor.pause_threshold = 1.1             # silêncio que encerra a frase: pausas curtas não cortam a fala
+_reconhecedor.pause_threshold = 0.8             # silêncio que encerra a frase (resposta rápida sem cortar a fala)
 _reconhecedor.non_speaking_duration = 0.5
 _reconhecedor.phrase_threshold = 0.15
 _fonte = None
@@ -50,8 +50,17 @@ def _carregar_whisper() -> None:
 
         _whisper_status = "carregando"
         # Na primeira vez baixa o modelo (centenas de MB); depois fica guardado no computador.
-        _whisper = WhisperModel(MODELO_WHISPER, device=os.getenv("JARVIS_WHISPER_DISPOSITIVO", "cpu"),
-                                compute_type="int8")
+        # Usa a placa de vídeo NVIDIA se houver (bem mais rápido); senão, todos os núcleos do processador.
+        try:
+            import numpy as np
+
+            modelo = WhisperModel(MODELO_WHISPER, device="cuda", compute_type="int8_float16")
+            list(modelo.transcribe(np.zeros(16000, dtype=np.float32), language="pt")[0])
+            print("Whisper rodando na placa de vídeo.")
+        except Exception:
+            modelo = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8",
+                                  cpu_threads=max(1, (os.cpu_count() or 4)))
+        _whisper = modelo
         _whisper_status = "pronto"
     except Exception as erro:
         print(f"Whisper indisponível ({erro}); usando o reconhecimento do Google.")
@@ -87,7 +96,7 @@ def _transcrever_whisper(audio: sr.AudioData) -> list[str]:
     segmentos, _ = _whisper.transcribe(
         bruto.astype(np.float32) / 32768.0,
         language="pt",
-        beam_size=3,
+        beam_size=1,  # bem mais rápido, quase a mesma precisão
         vad_filter=True,
         condition_on_previous_text=False,
         initial_prompt=VOCABULARIO,

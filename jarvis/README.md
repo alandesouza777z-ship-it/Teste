@@ -4,18 +4,27 @@ Um assistente estilo JARVIS do Homem de Ferro, que **ouve e fala com você**, co
 **computador**, o **Spotify** e o **WhatsApp**, e pesquisa na internet. A inteligência vem do Claude
 (API da Anthropic).
 
+Ele **ouve o tempo todo**: é só falar, sem precisar dizer "Jarvis". Para ele parar de ouvir,
+clique no **botão de microfone** (ou `Ctrl+M`, ou diga "pare de me ouvir"). Conversas com
+outras pessoas, TV e falas soltas são ignoradas. Com música tocando no Spotify, ele só atende
+quando você chama "Jarvis" (para não confundir a letra da música com pedidos).
+
 Exemplos do que você pode dizer:
 
-- "Jarvis, toca Back in Black do AC/DC" / "Jarvis, pausa a música" / "Jarvis, próxima"
-- "Jarvis, manda um WhatsApp pra minha mãe dizendo que chego às oito"
-- "Jarvis, abre o Chrome" / "Jarvis, aumenta o volume" / "Jarvis, tira um print"
-- "Jarvis, como está o computador?" (CPU, memória, bateria)
-- "Jarvis, qual a cotação do dólar hoje?" (pesquisa na web)
-- "Jarvis, abre o OBS" / "Jarvis, fecha o Edge" / "Jarvis, vai para o WhatsApp"
-- "Jarvis, abre a pasta Downloads" / "Jarvis, o que tem na minha tela?"
-- "Jarvis, desligar" encerra o assistente.
+- "Toca Back in Black do AC/DC" / "Pausa a música" / "Próxima"
+- "Manda um WhatsApp pra minha mãe dizendo que chego às oito"
+- "Abre o OBS" / "Fecha o Edge" / "Vai para o WhatsApp" / "Abre a pasta Downloads"
+- "O que tem na minha tela?" / "Como está o computador?" / "Qual a cotação do dólar hoje?"
+- "Modo respostas longas" / "Modo curto" — muda o tamanho das respostas
+- "Desligar" encerra o assistente.
 
-Depois que ele responde, você tem alguns segundos para continuar a conversa sem dizer "Jarvis" de novo.
+## Tamanho das respostas
+
+Nos botões **CURTA · MÉDIA · LONGA** ao lado da caixa de texto (ou pela voz):
+
+- **Curta** (padrão): uma frase; ao fazer algo, só confirma ("Feito, senhor.").
+- **Média**: duas ou três frases.
+- **Longa**: explicações completas.
 
 ## O aplicativo
 
@@ -32,12 +41,16 @@ falando (deforma com os graves, com ondas de choque nas batidas).
 
 ## Abrir com palmas
 
-Bata **duas palmas** e o JARVIS abre. O detector (`JARVIS-Palmas.exe`) roda escondido e inicia
-junto com o Windows. Enquanto o JARVIS está aberto, ele não ouve palmas e solta o microfone.
+Bata **duas palmas**: o JARVIS abre e o Spotify já começa a tocar **Back in Black, do AC/DC**
+(funciona sem Premium: ele abre a música e aperta o play sozinho). O detector
+(`JARVIS-Palmas.exe`) roda escondido e inicia junto com o Windows. Enquanto o JARVIS está
+aberto, ele não ouve palmas e solta o microfone.
 
 - Não reconhece suas palmas? Aumente `JARVIS_PALMAS_SENSIBILIDADE` no `.env` (ex.: `1.5`).
 - Abre sozinho com barulhos? Diminua (ex.: `0.7`).
-- Para testar os níveis: `python palmas.py --teste`.
+- Outra música: troque `JARVIS_PALMAS_MUSICA` (copie o link da música no Spotify:
+  Compartilhar → Copiar link, e use o código depois de `/track/` no formato `spotify:track:CODIGO`).
+  Deixe vazio para abrir só o JARVIS.
 - Para desligar de vez: `desligar_palmas.bat`.
 
 ### Instalar como aplicativo no Windows
@@ -119,8 +132,9 @@ O JARVIS usa o **Whisper** (da OpenAI, código aberto), que roda **no seu comput
 português muito melhor que o reconhecimento gratuito do Google e não precisa de internet para isso.
 
 - Na primeira vez ele baixa o modelo (~500 MB). Até terminar, usa o Google.
-- O microfone fica aberto o tempo todo e ele espera ~1 segundo de silêncio antes de considerar que
-  você terminou: frases não são mais cortadas no meio.
+- O microfone fica aberto o tempo todo e ele espera ~0,8 segundo de silêncio antes de considerar
+  que você terminou.
+- Se o PC tiver placa de vídeo NVIDIA, o Whisper roda nela (bem mais rápido).
 - Ele conhece nomes como Spotify, WhatsApp, OBS, Obsidian e Claude, e entende "Jarvis" mesmo
   quando ouve "Jarbas" ou "Javis".
 - PC lento? Use `JARVIS_WHISPER_MODELO=base` no `.env`. PC forte? `medium` é ainda mais preciso.

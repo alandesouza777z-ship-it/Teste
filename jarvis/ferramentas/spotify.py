@@ -61,6 +61,104 @@ def _abrir_uri(uri: str) -> None:
         webbrowser.open(uri)
 
 
+def _janela_spotify():
+    """Janela principal do aplicativo do Spotify (Windows), ou None."""
+    if platform.system() != "Windows":
+        return None
+    import ctypes
+
+    import psutil
+    import pygetwindow
+
+    for janela in pygetwindow.getAllWindows():
+        if not janela.title.strip() or janela.width < 300:
+            continue
+        pid = ctypes.c_ulong()
+        ctypes.windll.user32.GetWindowThreadProcessId(janela._hWnd, ctypes.byref(pid))
+        try:
+            if psutil.Process(pid.value).name().lower() == "spotify.exe":
+                return janela
+        except psutil.Error:
+            continue
+    return None
+
+
+def spotify_tocando() -> str | None:
+    """Título "Artista - Música" quando o Spotify está tocando (parado, o título é só "Spotify...")."""
+    try:
+        janela = _janela_spotify()
+    except Exception:
+        return None
+    if janela and " - " in janela.title:
+        return janela.title
+    return None
+
+
+def _clicar_play_verde(janela) -> bool:
+    """Acha o maior botão verde de play dentro da janela do Spotify e clica nele."""
+    import pyautogui
+
+    esq, topo, larg, alt = janela.left, janela.top, janela.width, janela.height
+    imagem = pyautogui.screenshot(region=(esq, topo, larg, alt)).convert("RGB")
+    pequena = imagem.resize((larg // 2, alt // 2))
+    verdes = []
+    for indice, (r, g, b) in enumerate(pequena.getdata()):
+        # Verde do Spotify: #1ED760 / #1DB954
+        if g > 160 and g - r > 110 and g - b > 60 and r < 90:
+            verdes.append((indice % pequena.width, indice // pequena.width))
+    if len(verdes) < 40:
+        return False
+    celulas: dict[tuple[int, int], list] = {}
+    for x, y in verdes:
+        celulas.setdefault((x // 20, y // 20), []).append((x, y))
+    maior = max(celulas.values(), key=len)
+    cx = sum(x for x, _ in maior) / len(maior)
+    cy = sum(y for _, y in maior) / len(maior)
+    for _ in range(3):  # recentraliza usando o botão inteiro, não só um pedaço
+        perto = [(x, y) for x, y in verdes if (x - cx) ** 2 + (y - cy) ** 2 < 35 ** 2]
+        cx = sum(x for x, _ in perto) / len(perto)
+        cy = sum(y for _, y in perto) / len(perto)
+    pyautogui.click(esq + round(cx * 2), topo + round(cy * 2))
+    return True
+
+
+def tocar_no_aplicativo(uri: str, nome_esperado: str = "", espera_maxima: float = 25) -> bool:
+    """Abre uma música (spotify:track:...) no app do Spotify e dá play pela tela. Funciona sem Premium."""
+    _abrir_uri(uri)
+    if platform.system() != "Windows":
+        return False
+    import pyautogui
+
+    limite = time.time() + espera_maxima
+    janela = None
+    while time.time() < limite and janela is None:
+        time.sleep(0.5)
+        janela = _janela_spotify()
+    if janela is None:
+        return False
+    time.sleep(2.5)  # a página da música termina de carregar
+
+    def tocando_certo() -> bool:
+        titulo = spotify_tocando()
+        return bool(titulo) and (not nome_esperado or nome_esperado.lower() in titulo.lower())
+
+    for _ in range(3):
+        if tocando_certo():
+            return True
+        try:
+            if janela.isMinimized:
+                janela.restore()
+            janela.activate()
+        except Exception:
+            pass
+        time.sleep(0.6)
+        if not _clicar_play_verde(janela):
+            pyautogui.press("playpause")
+        time.sleep(2)
+        janela = _janela_spotify() or janela
+    return tocando_certo()
+
+
 def tocar_spotify(busca: str, tipo: str = "musica") -> str:
     tipos = {"musica": "track", "artista": "artist", "album": "album", "playlist": "playlist"}
     tipo_api = tipos.get(tipo, "track")
@@ -84,7 +182,8 @@ def tocar_spotify(busca: str, tipo: str = "musica") -> str:
 
     # Sem API (ou sem Premium): abre direto no aplicativo do Spotify.
     if item:
-        _abrir_uri(item["uri"])
+        if tocar_no_aplicativo(item["uri"], item["name"]):
+            return f"Tocando {item['name']} no aplicativo do Spotify."
         aberto = f"a página de '{item['name']}'"
     else:
         _abrir_uri("spotify:search:" + quote(busca))

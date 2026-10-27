@@ -11,6 +11,12 @@ import ferramentas
 
 MODELO = "claude-haiku-5-5"
 NOME_USUARIO = os.getenv("JARVIS_NOME_USUARIO", "senhor")
+# Tamanho das respostas: instrução para o modelo e limite de tokens de cada modo.
+MODOS = {
+    "curta": ("responda em UMA frase curta de no máximo 15 palavras; ao concluir uma ação, só confirme", 1500),
+    "moderada": ("responda em duas ou três frases", 2500),
+    "longa": ("pode responder de forma completa e detalhada, sem enrolar", 6000),
+}
 MAX_PASSOS = 25  # limite de ações seguidas num mesmo pedido
 NOVA_CONVERSA_APOS = 5 * 60  # segundos parado até começar uma conversa nova (mantém as respostas rápidas)
 
@@ -26,8 +32,13 @@ artistas e contatos. Interprete pelo som e pelo contexto (por exemplo "bequi in 
 "Back in Black") e aja com base no que ele mais provavelmente quis dizer. Só pergunte se for \
 realmente impossível entender.
 
+O microfone fica ligado o tempo todo, então você ouve também conversas com outras pessoas, TV e música. \
+Se a fala claramente não for um pedido ou pergunta para você, ou for só um trecho solto sem sentido, \
+responda exatamente [ignorar] e nada mais.
+
 Suas respostas são faladas em voz alta, então fale como numa conversa de verdade:
-- Seja breve: uma ou duas frases curtas, que fluem naturalmente. Evite vírgulas desnecessárias e enumerações.
+- Cada mensagem indica o modo de resposta (curta, moderada ou longa). Siga o tamanho pedido à risca.
+- Frases que fluem naturalmente. Evite vírgulas desnecessárias e enumerações.
 - Nunca use markdown, listas, emojis, links ou código.
 - Arredonde números e resuma dados ("o processador está tranquilo") em vez de ler valores técnicos.
 
@@ -73,12 +84,14 @@ class Cerebro:
         self.cliente = anthropic.Anthropic(timeout=30, max_retries=1)
         self.historico: list = []
         self.ultimo_uso = 0.0
+        modo = os.getenv("JARVIS_MODO_RESPOSTA", "curta")
+        self.modo = modo if modo in MODOS else "curta"
 
     def _transmitir(self, ao_falar):
         """Pede a resposta em streaming e fala cada frase assim que ela fica pronta."""
         with self.cliente.messages.stream(
             model=MODELO,
-            max_tokens=4000,
+            max_tokens=MODOS[self.modo][1],
             system=PERSONALIDADE,
             tools=ferramentas.SCHEMAS + [PESQUISA_WEB],
             messages=self.historico,
@@ -91,8 +104,9 @@ class Cerebro:
                 buffer += trecho
                 frases, buffer = _separar_frases(buffer)
                 for frase in frases:
-                    ao_falar(frase)
-            if buffer.strip():
+                    if "[ignorar]" not in frase:
+                        ao_falar(frase)
+            if buffer.strip() and "[ignorar]" not in buffer:
                 ao_falar(buffer.strip())
             return stream.get_final_message()
 
@@ -102,7 +116,8 @@ class Cerebro:
             self.historico = []
         tamanho_antes = len(self.historico)
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-        self.historico.append({"role": "user", "content": f"[{agora}] {texto_usuario}"})
+        instrucao = MODOS[self.modo][0]
+        self.historico.append({"role": "user", "content": f"[{agora} | modo {self.modo}: {instrucao}] {texto_usuario}"})
 
         def desistir(mensagem: str) -> None:
             # Descarta este pedido inteiro para a conversa continuar válida.

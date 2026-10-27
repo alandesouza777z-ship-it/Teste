@@ -1,4 +1,4 @@
-"""Laço do assistente: palavra de ativação, conversa e confirmações.
+"""Laço do assistente: escuta contínua (ou palavra de ativação), conversa e confirmações.
 
 Usado tanto pelo terminal (main.py) quanto pelo aplicativo com interface (app.py).
 A escuta roda numa única thread: pedidos digitados na interface entram pela fila e
@@ -6,14 +6,24 @@ são atendidos entre uma escuta e outra do microfone. A fala roda em paralelo
 (voz.Locutor), para o JARVIS começar a falar antes de terminar de pensar.
 """
 
+import os
 import queue
+import re
 import time
 
 import voz
-from cerebro import NOME_USUARIO, Cerebro
-from ferramentas import confirmacao
+from cerebro import MODOS, NOME_USUARIO, Cerebro
+from ferramentas import confirmacao, spotify
 
-DESPEDIDAS = ("desligar", "desliga", "encerrar", "encerra", "até logo", "tchau")
+DESPEDIDAS = ("desligar", "desliga", "encerrar", "encerra", "ate logo", "tchau jarvis", "desligar jarvis")
+# "continua": ouve tudo o que você fala; "palavra": só depois de "Jarvis".
+ESCUTA_CONTINUA = os.getenv("JARVIS_ESCUTA", "continua").lower() != "palavra"
+FALAS_SOLTAS = {"obrigado", "obrigada", "hum", "hmm", "ah", "e", "eh", "ok", "tchau", "sim", "nao", "uhum", "ai"}
+PADROES_MODO = {
+    "curta": r"\b(curt[ao]s?|rapid[ao]s?|resumid[ao]s?)\b",
+    "moderada": r"\b(moderad[ao]s?|medi[ao]s?|normal|normais)\b",
+    "longa": r"\b(long[ao]s?|detalhad[ao]s?|complet[ao]s?)\b",
+}
 JANELA_CONVERSA = 8  # segundos esperando continuação sem precisar dizer "Jarvis" de novo
 TEMPO_CONFIRMACAO = 12
 
@@ -32,13 +42,15 @@ def saudacao() -> str:
 
 class Assistente:
     def __init__(self, tocar_audio=voz.tocar_mp3, tocar_offline=voz.falar_offline,
-                 ao_estado=_nada, ao_mensagem=_nada, ao_confirmar=_nada, ao_encerrar=_nada):
+                 ao_estado=_nada, ao_mensagem=_nada, ao_confirmar=_nada, ao_encerrar=_nada,
+                 ao_modo=_nada, ao_mudo=_nada):
         """
         tocar_audio(mp3): toca o áudio e só retorna quando terminar.
         tocar_offline(texto): fala sem internet (voz do sistema).
         ao_estado(estado): "ocioso", "ouvindo", "pensando" ou "falando".
         ao_mensagem(quem, texto): quem é "voce", "jarvis" (nova resposta) ou "jarvis+" (continuação).
         ao_confirmar(pergunta): a interface pode mostrar botões sim/não (resposta vem por enviar()).
+        ao_modo(modo) / ao_mudo(bool): avisam a interface quando o modo de resposta ou o microfone mudam.
         """
         self.cerebro = Cerebro()
         self._ao_estado = ao_estado
@@ -46,6 +58,10 @@ class Assistente:
         self.ao_mensagem = ao_mensagem
         self.ao_confirmar = ao_confirmar
         self.ao_encerrar = ao_encerrar
+        self.ao_modo = ao_modo
+        self.ao_mudo = ao_mudo
+        self.escuta_continua = ESCUTA_CONTINUA
+        self.mudo = False
         self.fila: queue.Queue[str] = queue.Queue()
         self.microfone = True
         self.ocupado = False
@@ -127,7 +143,35 @@ class Assistente:
             self.locutor.esperar()
         finally:
             self.ocupado = False
-            self.ao_estado("ocioso")
+            self.ao_estado("mudo" if self.mudo else "ocioso")
+
+    # ---------- Comandos rápidos (sem passar pelo Claude) ----------
+
+    def definir_modo(self, modo: str) -> None:
+        if modo in MODOS:
+            self.cerebro.modo = modo
+            self.ao_modo(modo)
+
+    def definir_mudo(self, mudo: bool) -> None:
+        self.mudo = mudo
+        self.ao_mudo(mudo)
+        self.ao_estado("mudo" if mudo else "ocioso")
+
+    def _comando_rapido(self, pedido: str) -> bool:
+        texto = voz._sem_acento(pedido)
+        for modo, padrao in PADROES_MODO.items():
+            curto = len(texto.split()) <= 7  # "modo curto", "quero respostas longas"...
+            if curto and re.search(padrao, texto) and re.search(r"\b(modo|respost)", texto):
+                self.definir_modo(modo)
+                self._dizer_e_esperar(f"Modo de respostas {modo} ativado, {NOME_USUARIO}.")
+                return True
+        if re.search(r"(pare|para|parar) de (me )?(ouvir|escutar)|desliga(r)? o microfone", texto):
+            self._dizer_e_esperar(f"Microfone desligado, {NOME_USUARIO}. Clique no microfone para me chamar.")
+            self.definir_mudo(True)
+            return True
+        return False
+
+    # ---------- Laço principal ----------
 
     def _entender(self, alternativas: list[str], em_conversa: bool) -> str | None:
         """Devolve o pedido contido na fala, "" se só chamaram "Jarvis", ou None se não era com ele."""
@@ -135,7 +179,18 @@ class Assistente:
             pedido = voz.separar_ativacao(frase)
             if pedido is not None:
                 return pedido
-        return alternativas[0] if em_conversa else None
+        frase = alternativas[0].strip()
+        if em_conversa:
+            return frase
+        if not self.escuta_continua:
+            return None
+        # Com música tocando, o microfone ouve as letras: aí só atende quem chama "Jarvis".
+        if spotify.spotify_tocando():
+            return None
+        # Ruídos que o reconhecimento transforma em palavras soltas ("Obrigado.", "Hum").
+        if len(frase) < 4 or voz._sem_acento(frase).strip(" .!?") in FALAS_SOLTAS:
+            return None
+        return frase
 
     def rodar(self) -> None:
         self._dizer_e_esperar(saudacao())
@@ -152,12 +207,12 @@ class Assistente:
                 pedido = voz.separar_ativacao(digitado) or digitado
                 self.ao_mensagem("voce", digitado)
             else:
-                if not self.microfone:
+                if not self.microfone or self.mudo:
                     time.sleep(0.2)
                     continue
-                self.ao_estado("ouvindo" if em_conversa else "ocioso")
+                self.ao_estado("ouvindo" if (em_conversa or self.escuta_continua) else "ocioso")
                 alternativas = self._ouvir(tempo_limite=2)
-                if not alternativas:
+                if not alternativas or self.mudo:
                     continue
                 print(f"Você: {alternativas[0]}")
                 pedido = self._entender(alternativas, em_conversa)
@@ -174,10 +229,12 @@ class Assistente:
                     pedido = alternativas[0]
                     self.ao_mensagem("voce", pedido)
 
-            if pedido.lower().strip(" .!") in DESPEDIDAS:
+            if voz._sem_acento(pedido).strip(" .!") in DESPEDIDAS:
                 self._dizer_e_esperar(f"Desligando. Até logo, {NOME_USUARIO}.")
                 self.ao_encerrar()
                 return
+            if self._comando_rapido(pedido):
+                continue
 
             self._processar(pedido)
             conversa_ate = time.time() + JANELA_CONVERSA

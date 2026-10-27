@@ -83,8 +83,24 @@
   #voce { color: var(--apagado); font-size: 13px; min-height: 18px; font-style: italic; }
   #fala { margin-top: 6px; font-size: 18px; font-weight: 300; line-height: 1.5; min-height: 27px; color: var(--branco);
     text-shadow: 0 0 22px rgba(255,255,255,.25); }
-  #barra { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(520px, calc(100% - 32px)); }
-  #entrada { width: 100%; background: var(--vidro); border: 1px solid var(--linha); color: var(--texto);
+  #barra { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(820px, calc(100% - 32px));
+    display: flex; align-items: center; gap: 10px; }
+  #microfone { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4);
+    background: rgba(255,255,255,.06); color: var(--branco); cursor: pointer; display: grid; place-items: center;
+    backdrop-filter: blur(10px); transition: background .2s, box-shadow .2s, border-color .2s; }
+  #microfone svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.6; fill: none; }
+  #microfone:not(.mudo) { box-shadow: 0 0 0 0 rgba(255,255,255,.35); animation: aura 2.4s ease-out infinite; }
+  #microfone.mudo { border-color: var(--linha); color: var(--apagado); background: transparent; }
+  #microfone .risco { display: none; }
+  #microfone.mudo .risco { display: block; }
+  @keyframes aura { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.3); } 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); } }
+  .modos { flex: none; display: flex; padding: 3px; border: 1px solid var(--linha); border-radius: 22px;
+    background: var(--vidro); backdrop-filter: blur(10px); }
+  .modos button { border: 0; background: transparent; color: var(--apagado); font: 600 10.5px var(--hud);
+    letter-spacing: .22em; padding: 9px 12px; border-radius: 18px; cursor: pointer; transition: all .2s; }
+  .modos button:hover { color: var(--branco); }
+  .modos button.ativo { background: var(--branco); color: #000; }
+  #entrada { flex: 1; min-width: 0; background: var(--vidro); border: 1px solid var(--linha); color: var(--texto);
     padding: 12px 20px; border-radius: 24px; font: 400 14px var(--corpo); outline: none; user-select: text;
     backdrop-filter: blur(10px); transition: border-color .2s, box-shadow .2s; }
   #entrada:focus { border-color: rgba(255,255,255,.45); box-shadow: 0 0 24px rgba(255,255,255,.08); }
@@ -109,6 +125,7 @@
   @keyframes pulsar { 50% { opacity: .35; } }
   @keyframes entrar { from { opacity: 0; transform: translateY(6px); } }
   @media (max-width: 1080px) { .painel { display: none; } }
+  @media (max-width: 640px) { .modos button { padding: 9px 8px; letter-spacing: .1em; } }
 </style>
 </head>
 <body>
@@ -149,7 +166,16 @@
     <div id="fala"></div>
   </div>
   <form id="barra" autocomplete="off">
-    <input id="entrada" placeholder="Diga “Jarvis…” ou digite aqui">
+    <button type="button" id="microfone" title="Parar / voltar a ouvir (Ctrl+M)">
+      <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+        <path class="risco" d="M4 4l16 16"/></svg>
+    </button>
+    <input id="entrada" placeholder="Fale comigo ou digite aqui">
+    <div class="modos" title="Tamanho das respostas">
+      <button type="button" data-modo="curta">CURTA</button>
+      <button type="button" data-modo="moderada">MÉDIA</button>
+      <button type="button" data-modo="longa">LONGA</button>
+    </div>
   </form>
 
   <div id="inicio">

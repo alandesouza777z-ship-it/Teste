@@ -383,6 +383,7 @@ const ESTADOS = {
   ocioso:    { rotulo: "aguardando", luz: 0.7, atividade: 0.0, giro: 0.06, brilho: 0.8 },
   ouvindo:   { rotulo: "ouvindo", luz: 0.95, atividade: 0.75, giro: 0.1, brilho: 1.0 },
   pensando:  { rotulo: "processando", luz: 0.6, atividade: 0.5, giro: 0.6, brilho: 0.9 },
+  mudo:      { rotulo: "microfone desligado", luz: 0.35, atividade: 0.0, giro: 0.03, brilho: 0.55 },
   falando:   { rotulo: "falando", luz: 0.8, atividade: 0.35, giro: 0.12, brilho: 0.85 },
 };
 let estado = ESTADOS.iniciando, atividade = 0.2, giro = 0.3;
@@ -517,10 +518,38 @@ function iniciar() {
   api()?.iniciar();
 }
 
+// ---------- Microfone e modo de resposta ----------
+let mudo = false;
+function mostrarMudo(valor) {
+  mudo = valor;
+  $("microfone").classList.toggle("mudo", mudo);
+  $("microfone").title = mudo ? "Voltar a ouvir (Ctrl+M)" : "Parar de ouvir (Ctrl+M)";
+}
+function alternarMicrofone() {
+  mostrarMudo(!mudo);
+  api()?.definir_mudo(mudo);
+}
+$("microfone").addEventListener("click", alternarMicrofone);
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === "m") { e.preventDefault(); alternarMicrofone(); }
+});
+
+function mostrarModo(modo) {
+  document.querySelectorAll(".modos button").forEach((b) => b.classList.toggle("ativo", b.dataset.modo === modo));
+  try { localStorage.setItem("jarvis-modo", modo); } catch { /* sem armazenamento */ }
+}
+document.querySelectorAll(".modos button").forEach((botao) => {
+  botao.addEventListener("click", () => { mostrarModo(botao.dataset.modo); api()?.definir_modo(botao.dataset.modo); });
+});
+
 async function aoFicarPronto() {
   try {
     const cfg = await api()?.configuracao();
     if (cfg) efeitoVoz = cfg.efeitoVoz;
+    let modo = cfg?.modo || "curta";
+    try { modo = localStorage.getItem("jarvis-modo") || modo; } catch { /* sem armazenamento */ }
+    mostrarModo(modo);
+    api()?.definir_modo(modo);
   } catch { /* usa o padrão */ }
   prepararAudio();
   try { await contexto.resume(); } catch { /* sem permissão ainda */ }
@@ -581,6 +610,8 @@ window.jarvis = {
     el.textContent = quem === "voce" ? `“${texto}”` : texto;
   },
   confirmar() { elConfirmacao.classList.add("ativa"); },
+  modo: mostrarModo,
+  mudo: mostrarMudo,
 };
 
 window.addEventListener("resize", redimensionar);

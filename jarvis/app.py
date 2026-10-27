@@ -29,6 +29,7 @@ EFEITO_VOZ = os.getenv("JARVIS_EFEITO_VOZ", "1") != "0"
 
 janela = None
 assistente = None
+modo_pendente = None
 fala_terminou = threading.Event()
 
 
@@ -68,7 +69,22 @@ class Api:
     """Funções que a interface (JavaScript) pode chamar via window.pywebview.api."""
 
     def configuracao(self):
-        return {"efeitoVoz": EFEITO_VOZ}
+        from cerebro import MODOS
+
+        modo = os.getenv("JARVIS_MODO_RESPOSTA", "curta")
+        return {"efeitoVoz": EFEITO_VOZ, "modo": modo if modo in MODOS else "curta"}
+
+    def definir_modo(self, modo):
+        """Curta, moderada ou longa (botões da interface)."""
+        global modo_pendente
+        modo_pendente = modo
+        if assistente is not None:
+            assistente.definir_modo(modo)
+
+    def definir_mudo(self, mudo):
+        """Botão do microfone: True = parar de ouvir."""
+        if assistente is not None:
+            assistente.definir_mudo(bool(mudo))
 
     def iniciar(self):
         global assistente
@@ -84,7 +100,11 @@ class Api:
             ao_mensagem=lambda quem, texto: _js("mensagem", quem, texto),
             ao_confirmar=lambda pergunta: _js("confirmar", pergunta),
             ao_encerrar=lambda: janela.destroy(),
+            ao_modo=lambda modo: _js("modo", modo),
+            ao_mudo=lambda mudo: _js("mudo", mudo),
         )
+        if modo_pendente:
+            assistente.definir_modo(modo_pendente)
         threading.Thread(target=assistente.rodar, daemon=True).start()
 
     def enviar(self, texto):
