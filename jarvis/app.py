@@ -102,6 +102,7 @@ class Api:
             ao_encerrar=lambda: janela.destroy(),
             ao_modo=lambda modo: _js("modo", modo),
             ao_mudo=lambda mudo: _js("mudo", mudo),
+            veio_das_palmas="--palmas" in sys.argv,
         )
         if modo_pendente:
             assistente.definir_modo(modo_pendente)

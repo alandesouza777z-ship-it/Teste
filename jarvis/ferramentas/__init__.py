@@ -4,9 +4,9 @@ Cada módulo expõe FERRAMENTAS: lista de (schema, função). O schema segue o
 formato de tools da API da Anthropic.
 """
 
-from . import computador, spotify, whatsapp  # noqa: F401
+from . import computador, navegador, spotify, whatsapp  # noqa: F401
 
-_todas = computador.FERRAMENTAS + spotify.FERRAMENTAS + whatsapp.FERRAMENTAS
+_todas = computador.FERRAMENTAS + navegador.FERRAMENTAS + spotify.FERRAMENTAS + whatsapp.FERRAMENTAS
 
 SCHEMAS = [schema for schema, _ in _todas]
 FUNCOES = {schema["name"]: funcao for schema, funcao in _todas}

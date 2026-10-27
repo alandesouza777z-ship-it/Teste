@@ -41,8 +41,18 @@ falando (deforma com os graves, com ondas de choque nas batidas).
 
 ## Abrir com palmas
 
-Bata **duas palmas**: o JARVIS abre e o Spotify já começa a tocar **Back in Black, do AC/DC**
-(funciona sem Premium: ele abre a música e aperta o play sozinho). O detector
+Bata **duas palmas** e o JARVIS:
+
+1. abre e já começa a tocar **Back in Black, do AC/DC** no Spotify (funciona sem Premium: ele
+   abre a música e aperta o play sozinho);
+2. abre no **Google Chrome** o **Claude** (claude.ai) e o sistema da **Vault**
+   (vaultsistemas.com/hoje);
+3. abre o **WhatsApp Web** e diz quantas **conversas com mensagens não lidas** você tem.
+
+O número vem do título da aba do WhatsApp Web, que mostra quantas *conversas* têm mensagens
+novas (não o total de mensagens). Deixe o Chrome logado no WhatsApp da empresa. Você também pode
+perguntar a qualquer momento: "quantas mensagens não lidas eu tenho no WhatsApp?".
+Os sites e o WhatsApp são configuráveis no `.env` (`JARVIS_PALMAS_SITES`, `JARVIS_PALMAS_WHATSAPP`). O detector
 (`JARVIS-Palmas.exe`) roda escondido e inicia junto com o Windows. Enquanto o JARVIS está
 aberto, ele não ouve palmas e solta o microfone.
 
@@ -174,6 +184,7 @@ Comandos de terminal e mensagens de WhatsApp continuam pedindo confirmação.
 | `ferramentas/aplicativos.py` | Abrir, fechar e alternar aplicativos |
 | `ferramentas/controle.py` | Ver a tela, clicar, teclas, pastas e arquivos |
 | `ferramentas/computador.py` | Sites, volume, mídia, print, sistema, comandos |
+| `ferramentas/navegador.py` | Chrome e WhatsApp Web (sites, conversas não lidas) |
 | `ferramentas/spotify.py` | Tocar, pausar, pular, volume, música atual |
 | `ferramentas/whatsapp.py` | Enviar mensagens e abrir conversas |
 

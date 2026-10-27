@@ -31,6 +31,10 @@ ARQUIVO_PID = os.path.join(config.PASTA_USUARIO, ".jarvis.pid")
 # Música que começa a tocar junto com o JARVIS (deixe JARVIS_PALMAS_MUSICA vazio para desligar).
 MUSICA = os.getenv("JARVIS_PALMAS_MUSICA", "spotify:track:08mG3Y1vljYA6bvDt4Wqkj")  # AC/DC - Back In Black
 MUSICA_NOME = os.getenv("JARVIS_PALMAS_MUSICA_NOME", "Back In Black")
+# Sites que abrem no Chrome junto com as palmas (separados por vírgula).
+SITES = [u.strip() for u in os.getenv("JARVIS_PALMAS_SITES", "https://claude.ai,https://vaultsistemas.com/hoje").split(",")
+         if u.strip()]
+ABRIR_WHATSAPP = os.getenv("JARVIS_PALMAS_WHATSAPP", "1") != "0"
 
 
 def jarvis_aberto() -> bool:
@@ -47,12 +51,15 @@ def jarvis_aberto() -> bool:
 
 
 def abrir_jarvis() -> None:
+    # "--palmas": o JARVIS sabe que veio das palmas e avisa as mensagens não lidas do WhatsApp.
+    argumentos = ["--palmas"] if ABRIR_WHATSAPP else []
     pasta = os.path.dirname(sys.executable) if config.EMPACOTADO else config.PASTA_PROGRAMA
     exe = os.path.join(pasta, "JARVIS.exe")
     if os.path.exists(exe):
-        subprocess.Popen([exe], cwd=pasta)
+        subprocess.Popen([exe, *argumentos], cwd=pasta)
     else:
-        subprocess.Popen([sys.executable, os.path.join(config.PASTA_PROGRAMA, "app.py")], cwd=config.PASTA_PROGRAMA)
+        subprocess.Popen([sys.executable, os.path.join(config.PASTA_PROGRAMA, "app.py"), *argumentos],
+                         cwd=config.PASTA_PROGRAMA)
 
 
 def trazer_jarvis_para_frente() -> None:
@@ -70,17 +77,28 @@ def trazer_jarvis_para_frente() -> None:
 
 
 def ao_bater_palmas() -> None:
-    """Abre o JARVIS e, ao mesmo tempo, coloca a música para tocar no Spotify."""
+    """Rotina das palmas: JARVIS, música no Spotify, sites no Chrome e WhatsApp Web."""
     abrir_jarvis()
-    if not MUSICA:
-        return
-    try:
-        from ferramentas import spotify
+    if MUSICA:
+        try:
+            from ferramentas import spotify
 
-        tocando = spotify.tocar_no_aplicativo(MUSICA, MUSICA_NOME)
-        print("Música tocando." if tocando else "Não consegui dar play na música.")
+            tocando = spotify.tocar_no_aplicativo(MUSICA, MUSICA_NOME)
+            print("Música tocando." if tocando else "Não consegui dar play na música.")
+        except Exception as erro:
+            print(f"Erro ao tocar a música: {erro}")
+    # O Chrome abre depois do play: assim ele não rouba a tela enquanto o Spotify é clicado.
+    try:
+        from ferramentas import navegador
+
+        if SITES:
+            navegador.abrir_no_chrome(SITES)
+            time.sleep(1.5)
+        if ABRIR_WHATSAPP:
+            # Janela própria, para o WhatsApp ser a aba ativa e o JARVIS ler as não lidas no título.
+            navegador.abrir_whatsapp_web()
     except Exception as erro:
-        print(f"Erro ao tocar a música: {erro}")
+        print(f"Erro ao abrir o Chrome: {erro}")
     trazer_jarvis_para_frente()
 
 

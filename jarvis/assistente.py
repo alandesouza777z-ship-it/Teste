@@ -9,11 +9,12 @@ são atendidos entre uma escuta e outra do microfone. A fala roda em paralelo
 import os
 import queue
 import re
+import threading
 import time
 
 import voz
 from cerebro import MODOS, NOME_USUARIO, Cerebro
-from ferramentas import confirmacao, spotify
+from ferramentas import confirmacao, navegador, spotify
 
 DESPEDIDAS = ("desligar", "desliga", "encerrar", "encerra", "ate logo", "tchau jarvis", "desligar jarvis")
 # "continua": ouve tudo o que você fala; "palavra": só depois de "Jarvis".
@@ -43,7 +44,7 @@ def saudacao() -> str:
 class Assistente:
     def __init__(self, tocar_audio=voz.tocar_mp3, tocar_offline=voz.falar_offline,
                  ao_estado=_nada, ao_mensagem=_nada, ao_confirmar=_nada, ao_encerrar=_nada,
-                 ao_modo=_nada, ao_mudo=_nada):
+                 ao_modo=_nada, ao_mudo=_nada, veio_das_palmas=False):
         """
         tocar_audio(mp3): toca o áudio e só retorna quando terminar.
         tocar_offline(texto): fala sem internet (voz do sistema).
@@ -60,6 +61,7 @@ class Assistente:
         self.ao_encerrar = ao_encerrar
         self.ao_modo = ao_modo
         self.ao_mudo = ao_mudo
+        self.veio_das_palmas = veio_das_palmas
         self.escuta_continua = ESCUTA_CONTINUA
         self.mudo = False
         self.fila: queue.Queue[str] = queue.Queue()
@@ -192,8 +194,26 @@ class Assistente:
             return None
         return frase
 
+    def _avisar_whatsapp(self) -> None:
+        """Depois das palmas: espera o WhatsApp Web carregar e diz quantas conversas não lidas há."""
+        quantidade = navegador.contar_nao_lidas(espera_maxima=25)
+        if quantidade is None:
+            aviso = f"Não consegui abrir o WhatsApp Web, {NOME_USUARIO}."
+        elif quantidade == 0:
+            aviso = f"Nenhuma mensagem não lida no WhatsApp da empresa, {NOME_USUARIO}."
+        elif quantidade == 1:
+            aviso = f"Você tem uma conversa com mensagens não lidas no WhatsApp da empresa, {NOME_USUARIO}."
+        else:
+            aviso = f"Você tem {quantidade} conversas com mensagens não lidas no WhatsApp da empresa, {NOME_USUARIO}."
+        self._nova_resposta = True
+        self.locutor.dizer(aviso)
+
     def rodar(self) -> None:
-        self._dizer_e_esperar(saudacao())
+        if self.veio_das_palmas:
+            self._dizer_e_esperar(f"Bem-vindo de volta, {NOME_USUARIO}. Abrindo seus sistemas.")
+            threading.Thread(target=self._avisar_whatsapp, daemon=True).start()
+        else:
+            self._dizer_e_esperar(saudacao())
         self.ao_estado("ocioso")
         conversa_ate = 0.0
         while True:
