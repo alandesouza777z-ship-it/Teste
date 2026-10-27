@@ -6,10 +6,12 @@ import re
 import webbrowser
 from urllib.parse import quote
 
+from config import PASTA_USUARIO
+
 from .computador import _schema
 from .confirmacao import confirmar
 
-ARQUIVO_CONTATOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "contatos.json")
+ARQUIVO_CONTATOS = os.path.join(PASTA_USUARIO, "contatos.json")
 
 
 def _contatos() -> dict:

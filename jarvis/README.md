@@ -15,7 +15,36 @@ Exemplos do que você pode dizer:
 
 Depois que ele responde, você tem alguns segundos para continuar a conversa sem dizer "Jarvis" de novo.
 
-## Instalação (Windows, macOS ou Linux)
+## O aplicativo
+
+Janela toda preta com uma **esfera 3D de partículas** no centro, anéis orbitais e um relógio.
+A esfera muda conforme o que o JARVIS está fazendo:
+
+- **aguardando**: respira devagar, em azul;
+- **ouvindo**: fica mais clara e pulsa mais rápido;
+- **processando**: fica roxa e gira mais rápido;
+- **falando**: se deforma com os **graves da voz** em tempo real. Cada batida de grave solta uma
+  onda de choque e dá um leve tremor na câmera. A voz também ganha um reforço de graves.
+
+Embaixo aparecem as legendas (o que você disse e o que ele respondeu) e uma caixa para digitar
+pedidos. Quando ele pede confirmação, surgem os botões **Sim** e **Não** (também dá para responder
+falando).
+
+### Instalar como aplicativo no Windows
+
+1. Instale o **Python 3.10+** em https://python.org (marque **"Add Python to PATH"**).
+2. Baixe esta pasta, copie `.env.example` para `.env` e coloque sua chave da API.
+3. Dê dois cliques em **`instalar_windows.bat`**.
+4. Pronto: aparece o atalho **JARVIS** na Área de Trabalho, com o ícone da esfera.
+
+O aplicativo fica em `dist\JARVIS\`. O `.env` e o `contatos.json` que ele usa ficam
+**dentro dessa pasta**, ao lado do `JARVIS.exe`.
+
+No macOS ou Linux, rode `bash instalar_mac_linux.sh`.
+
+Para abrir sem empacotar (útil enquanto mexe no código): `python app.py`.
+
+## Instalação pelo terminal (sem empacotar)
 
 1. Instale o **Python 3.10+** (no Windows marque "Add Python to PATH").
 2. Nesta pasta:
@@ -30,8 +59,9 @@ Depois que ele responde, você tem alguns segundos para continuar a conversa sem
    (crie em https://console.anthropic.com).
 4. Rode:
    ```bash
-   python main.py           # modo voz
-   python main.py --texto   # modo texto (para testar sem microfone)
+   python app.py            # aplicativo com a esfera 3D
+   python main.py           # só voz, no terminal
+   python main.py --texto   # só texto, no terminal (para testar sem microfone)
    ```
 
 ## Spotify
@@ -77,7 +107,11 @@ ligadas na função `falar` de `voz.py`.
 
 | Arquivo | O que faz |
 |---|---|
-| `main.py` | Laço principal: palavra de ativação, modo voz/texto |
+| `app.py` | Aplicativo com janela (pywebview) |
+| `web/` | Interface: HTML, esfera 3D (Three.js) e análise de áudio |
+| `assistente.py` | Laço principal: palavra de ativação, conversa, confirmações |
+| `main.py` | Versão de terminal (voz ou texto) |
+| `instalar_windows.bat` / `instalar_mac_linux.sh` | Geram o aplicativo e o atalho |
 | `voz.py` | Ouvir (microfone → texto) e falar (texto → voz) |
 | `cerebro.py` | Personalidade do JARVIS e conversa com o Claude |
 | `ferramentas/computador.py` | Programas, sites, volume, mídia, print, sistema, comandos |

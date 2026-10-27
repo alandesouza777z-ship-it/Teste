@@ -27,24 +27,40 @@ def _tocar_mp3(caminho: str) -> None:
     pygame.mixer.music.unload()
 
 
+def sintetizar(texto: str) -> bytes:
+    """Gera o áudio MP3 da fala com voz neural (edge-tts, precisa de internet)."""
+    import edge_tts
+
+    async def _gerar() -> bytes:
+        audio = b""
+        async for pedaco in edge_tts.Communicate(texto, VOZ, rate=VELOCIDADE, pitch=TOM).stream():
+            if pedaco["type"] == "audio":
+                audio += pedaco["data"]
+        return audio
+
+    return asyncio.run(_gerar())
+
+
+def falar_offline(texto: str) -> None:
+    import pyttsx3
+
+    motor = pyttsx3.init()
+    motor.say(texto)
+    motor.runAndWait()
+
+
 def falar(texto: str) -> None:
-    """Fala o texto com voz neural (edge-tts); cai para pyttsx3 se estiver offline."""
+    """Fala o texto pelo alto-falante; cai para a voz do sistema se estiver offline."""
     print(f"JARVIS: {texto}")
     if not texto.strip():
         return
     try:
-        import edge_tts
-
         arquivo = os.path.join(tempfile.gettempdir(), "jarvis_fala.mp3")
-        comunicador = edge_tts.Communicate(texto, VOZ, rate=VELOCIDADE, pitch=TOM)
-        asyncio.run(comunicador.save(arquivo))
+        with open(arquivo, "wb") as saida:
+            saida.write(sintetizar(texto))
         _tocar_mp3(arquivo)
     except Exception:
-        import pyttsx3
-
-        motor = pyttsx3.init()
-        motor.say(texto)
-        motor.runAndWait()
+        falar_offline(texto)
 
 
 def ouvir(tempo_limite: float | None = None, limite_frase: float = 15) -> str:

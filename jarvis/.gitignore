@@ -4,3 +4,7 @@ contatos.json
 __pycache__/
 *.mp3
 memoria.json
+build/
+dist/
+.venv/
+*.spec

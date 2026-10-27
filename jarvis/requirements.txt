@@ -9,3 +9,4 @@ spotipy>=2.24
 pywhatkit>=5.4
 pyautogui>=0.9.54
 psutil>=5.9
+pywebview>=5.0

@@ -3,6 +3,8 @@
 import os
 import time
 
+from config import PASTA_USUARIO
+
 from .computador import _schema, abrir_programa
 
 ESCOPOS = "user-modify-playback-state user-read-playback-state user-read-currently-playing"
@@ -17,7 +19,9 @@ def _sp():
         import spotipy
         from spotipy.oauth2 import SpotifyOAuth
 
-        _cliente = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=ESCOPOS, open_browser=True))
+        _cliente = spotipy.Spotify(auth_manager=SpotifyOAuth(
+            scope=ESCOPOS, open_browser=True, cache_path=os.path.join(PASTA_USUARIO, ".cache-spotify")
+        ))
     return _cliente
 
 
