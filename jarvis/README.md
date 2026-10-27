@@ -17,14 +17,14 @@ Depois que ele responde, você tem alguns segundos para continuar a conversa sem
 
 ## O aplicativo
 
-Janela toda preta com uma **esfera 3D de partículas** no centro, anéis orbitais e um relógio.
+Visual todo em **preto e branco**: uma **esfera 3D de partículas** no centro, anéis orbitais e um relógio.
 A esfera muda conforme o que o JARVIS está fazendo:
 
-- **aguardando**: respira devagar, em azul;
+- **aguardando**: respira devagar;
 - **ouvindo**: fica mais clara e pulsa mais rápido;
-- **processando**: fica roxa e gira mais rápido;
+- **processando**: escurece e gira mais rápido;
 - **falando**: se deforma com os **graves da voz** em tempo real. Cada batida de grave solta uma
-  onda de choque e dá um leve tremor na câmera. A voz também ganha um reforço de graves.
+  onda de choque e dá um leve tremor na câmera.
 
 Embaixo aparecem as legendas (o que você disse e o que ele respondeu) e uma caixa para digitar
 pedidos. Quando ele pede confirmação, surgem os botões **Sim** e **Não** (também dá para responder
@@ -92,14 +92,27 @@ oficial para contas pessoais).
 
 ## A voz
 
-A voz padrão é a `pt-BR-AntonioNeural` (Microsoft, gratuita, masculina e calma), com o tom um
-pouco mais grave. Troque em `JARVIS_VOZ` no `.env` — `en-GB-RyanNeural` dá o sotaque britânico de
-mordomo. A personalidade (educado, irônico, te chama de "senhor") está em `cerebro.py` e
-você pode editá-la à vontade.
+A voz padrão é a `pt-BR-AntonioNeural` (Microsoft, gratuita). Para ouvir outras opções, rode
+`python testar_vozes.py` e coloque a escolhida em `JARVIS_VOZ` no `.env`. As vozes
+"Multilingual" são as mais naturais. A personalidade (educado, irônico, te chama de "senhor")
+está em `cerebro.py`.
 
-A voz do ator do filme não está incluída: ela pertence ao ator e ao estúdio. Se quiser algo ainda
-mais próximo, serviços como o ElevenLabs têm vozes no estilo "mordomo britânico" que podem ser
-ligadas na função `falar` de `voz.py`.
+Para soar natural, o JARVIS:
+- tira vírgulas e travessões antes de falar, então não faz pausa a cada vírgula;
+- começa a falar assim que a primeira frase da resposta fica pronta, e gera a próxima enquanto
+  fala a atual;
+- avisa "Um momento, senhor." antes de pesquisar na internet.
+
+A voz do ator do filme não está incluída: ela pertence ao ator e ao estúdio.
+
+## Entender a sua voz
+
+- A palavra "Jarvis" é reconhecida mesmo quando o reconhecimento entende errado ("Jarbas",
+  "Javis", "Jarvas"...).
+- O JARVIS recebe as várias interpretações possíveis do que você falou e o Claude interpreta
+  pelo som e pelo contexto (por exemplo "bequi in bléqui" vira "Back in Black").
+- Fale normalmente, perto do microfone. Depois que ele responde, você tem 8 segundos para
+  continuar sem dizer "Jarvis" de novo.
 
 ## Segurança
 

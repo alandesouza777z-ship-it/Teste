@@ -31,9 +31,7 @@ def modo_texto() -> None:
 
 
 def modo_voz() -> None:
-    import voz
-
-    Assistente(falar=voz.falar).rodar()
+    Assistente().rodar()
 
 
 def main() -> None:

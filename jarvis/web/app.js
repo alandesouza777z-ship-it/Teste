@@ -54,8 +54,8 @@ const uniformes = {
   uMedio: { value: 0 },
   uAtividade: { value: 0 },
   uPixel: { value: 1 },
-  uCor: { value: new THREE.Color("#1aa7ff") },
-  uCor2: { value: new THREE.Color("#8ff0ff") },
+  uCor: { value: new THREE.Color("#a0a0a0") },
+  uCor2: { value: new THREE.Color("#ffffff") },
 };
 
 function esferaFibonacci(quantidade) {
@@ -97,7 +97,7 @@ const particulas = new THREE.Points(
         vec4 mv = modelViewMatrix * vec4(dir * (1.0 + desloc), 1.0);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = (1.3 + aAleatorio * 1.7 + uGrave * 2.6) * uPixel * (4.6 / -mv.z);
-        vBrilho = 0.38 + max(desloc, 0.0) * 3.0 + uAtividade * 0.22 + aAleatorio * 0.12;
+        vBrilho = 0.5 + max(desloc, 0.0) * 3.0 + uAtividade * 0.22 + aAleatorio * 0.12;
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uCor, uCor2;
@@ -119,9 +119,9 @@ function texturaBrilho() {
   c.width = c.height = 256;
   const ctx = c.getContext("2d");
   const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, "rgba(120,220,255,0.55)");
-  g.addColorStop(0.25, "rgba(40,160,255,0.22)");
-  g.addColorStop(0.6, "rgba(20,90,200,0.06)");
+  g.addColorStop(0, "rgba(255,255,255,0.32)");
+  g.addColorStop(0.25, "rgba(200,200,200,0.12)");
+  g.addColorStop(0.6, "rgba(120,120,120,0.04)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 256, 256);
@@ -136,7 +136,7 @@ cena.add(brilho);
 // Casca geométrica
 const casca = new THREE.LineSegments(
   new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.32, 2)),
-  new THREE.LineBasicMaterial({ color: 0x38d6ff, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false })
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, blending: THREE.AdditiveBlending, depthWrite: false })
 );
 nucleo.add(casca);
 
@@ -151,7 +151,7 @@ const aneis = [];
   const linha = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(pontos),
     new THREE.LineDashedMaterial({
-      color: 0x38d6ff, dashSize: 0.06 + i * 0.05, gapSize: 0.05 + i * 0.03,
+      color: 0xffffff, dashSize: 0.06 + i * 0.05, gapSize: 0.05 + i * 0.03,
       transparent: true, opacity: 0.32 - i * 0.07, blending: THREE.AdditiveBlending, depthWrite: false,
     })
   );
@@ -172,7 +172,7 @@ const poeira = (() => {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   return new THREE.Points(g, new THREE.PointsMaterial({
-    color: 0x2a9fd6, size: 0.018, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
+    color: 0x9a9a9a, size: 0.018, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
 })();
 cena.add(poeira);
@@ -182,7 +182,7 @@ const ondas = [];
 function dispararOnda(forca) {
   const onda = new THREE.Mesh(
     new THREE.RingGeometry(0.985, 1.0, 128),
-    new THREE.MeshBasicMaterial({ color: 0x6fe6ff, transparent: true, opacity: 0.5 * forca, blending: THREE.AdditiveBlending, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 * forca, blending: THREE.AdditiveBlending, depthWrite: false })
   );
   onda.userData = { idade: 0, forca };
   ondas.push(onda);
@@ -206,7 +206,7 @@ function prepararAudio() {
   const grave = contexto.createBiquadFilter();
   grave.type = "lowshelf";
   grave.frequency.value = 180;
-  grave.gain.value = 7;
+  grave.gain.value = 4;
   const compressor = contexto.createDynamicsCompressor();
   compressor.threshold.value = -18;
   compressor.ratio.value = 3;
@@ -276,10 +276,10 @@ function lerAudio(t) {
 
 // ---------- Estados ----------
 const ESTADOS = {
-  ocioso:   { rotulo: "aguardando · diga “jarvis”", cor: "#1aa7ff", cor2: "#8ff0ff", atividade: 0.0, giro: 0.05 },
-  ouvindo:  { rotulo: "ouvindo",                    cor: "#2fd8ff", cor2: "#ffffff", atividade: 0.7, giro: 0.08 },
-  pensando: { rotulo: "processando",                cor: "#5b5cff", cor2: "#47dcff", atividade: 0.45, giro: 0.45 },
-  falando:  { rotulo: "falando",                    cor: "#16b8ff", cor2: "#c4f7ff", atividade: 0.35, giro: 0.1 },
+  ocioso:   { rotulo: "aguardando · diga “jarvis”", cor: "#a0a0a0", cor2: "#ffffff", atividade: 0.0, giro: 0.05 },
+  ouvindo:  { rotulo: "ouvindo",                    cor: "#d0d0d0", cor2: "#ffffff", atividade: 0.7, giro: 0.08 },
+  pensando: { rotulo: "processando",                cor: "#7a7a7a", cor2: "#e0e0e0", atividade: 0.45, giro: 0.45 },
+  falando:  { rotulo: "falando",                    cor: "#b8b8b8", cor2: "#ffffff", atividade: 0.35, giro: 0.1 },
 };
 let estado = ESTADOS.ocioso;
 const corAlvo = new THREE.Color(estado.cor), cor2Alvo = new THREE.Color(estado.cor2);
@@ -403,6 +403,14 @@ window.jarvis = {
     if (nome === "pensando" || nome === "ocioso") elConfirmacao.classList.remove("ativa");
   },
   mensagem(quem, texto) {
+    // "jarvis+" = próxima frase da mesma resposta: entra ao lado da anterior.
+    if (quem === "jarvis+" && elFala.textContent.length + texto.length < 220) {
+      const trecho = document.createElement("span");
+      trecho.textContent = " " + texto;
+      trecho.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+      elFala.append(trecho);
+      return;
+    }
     const el = quem === "voce" ? elVoce : elFala;
     el.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 350 });
     el.textContent = quem === "voce" ? `“${texto}”` : texto;

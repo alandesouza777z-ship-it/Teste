@@ -7,10 +7,10 @@
 <style>
   :root {
     --fundo: #000;
-    --ciano: #38d6ff;
-    --ciano-fraco: rgba(56, 214, 255, 0.45);
-    --texto: #d8f6ff;
-    --apagado: rgba(216, 246, 255, 0.45);
+    --destaque: #ffffff;
+    --destaque-fraco: rgba(255, 255, 255, 0.45);
+    --texto: #f2f2f2;
+    --apagado: rgba(255, 255, 255, 0.45);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; background: var(--fundo); color: var(--texto); overflow: hidden;
@@ -18,14 +18,14 @@
   canvas { position: fixed; inset: 0; display: block; }
 
   .hud { position: fixed; pointer-events: none; letter-spacing: .28em; font-size: 12px;
-    text-transform: uppercase; color: var(--ciano-fraco); }
+    text-transform: uppercase; color: var(--destaque-fraco); }
   .hud.topo-esq { top: 22px; left: 28px; }
   .hud.topo-dir { top: 22px; right: 28px; text-align: right; }
-  .hud .titulo { color: var(--ciano); font-size: 15px; font-weight: 600; letter-spacing: .5em; }
+  .hud .titulo { color: var(--destaque); font-size: 15px; font-weight: 600; letter-spacing: .5em; }
   .hud .linha { margin-top: 6px; }
 
   #estado { position: fixed; left: 50%; bottom: 168px; transform: translateX(-50%);
-    font-size: 11px; letter-spacing: .5em; color: var(--ciano); text-transform: uppercase;
+    font-size: 11px; letter-spacing: .5em; color: var(--destaque); text-transform: uppercase;
     pointer-events: none; transition: opacity .3s; }
 
   #sombra { position: fixed; left: 0; right: 0; bottom: 0; height: 260px; pointer-events: none;
@@ -34,29 +34,29 @@
     width: min(820px, calc(100% - 32px)); text-align: center; pointer-events: none; }
   #voce { color: var(--apagado); font-size: 14px; min-height: 20px; }
   #fala { margin-top: 8px; font-size: 19px; line-height: 1.45; min-height: 28px;
-    text-shadow: 0 0 18px rgba(56, 214, 255, .35); }
+    text-shadow: 0 0 18px rgba(255, 255, 255, .25); }
 
   #barra { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
     width: min(560px, calc(100% - 32px)); display: flex; gap: 10px; }
-  #entrada { flex: 1; background: rgba(56, 214, 255, .05); border: 1px solid rgba(56, 214, 255, .22);
+  #entrada { flex: 1; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .2);
     color: var(--texto); padding: 11px 16px; border-radius: 22px; font-size: 14px; outline: none;
     user-select: text; transition: border-color .2s; }
-  #entrada:focus { border-color: var(--ciano); }
+  #entrada:focus { border-color: var(--destaque); }
   #entrada::placeholder { color: var(--apagado); }
 
   #confirmacao { position: fixed; left: 50%; bottom: 220px; transform: translateX(-50%);
     display: none; gap: 14px; }
   #confirmacao.ativa { display: flex; }
-  .botao { background: transparent; border: 1px solid var(--ciano); color: var(--ciano);
+  .botao { background: transparent; border: 1px solid var(--destaque); color: var(--destaque);
     padding: 9px 26px; border-radius: 20px; letter-spacing: .3em; font-size: 12px; cursor: pointer; }
-  .botao:hover { background: rgba(56, 214, 255, .12); }
+  .botao:hover { background: rgba(255, 255, 255, .1); }
 
   #inicio { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 26px; background: rgba(0, 0, 0, .55); cursor: pointer;
     transition: opacity .8s; z-index: 5; }
   #inicio.sumindo { opacity: 0; pointer-events: none; }
-  #inicio h1 { font-weight: 300; letter-spacing: .8em; font-size: 34px; margin-right: -.8em; color: var(--ciano);
-    text-shadow: 0 0 24px rgba(56, 214, 255, .6); }
+  #inicio h1 { font-weight: 300; letter-spacing: .8em; font-size: 34px; margin-right: -.8em; color: var(--destaque);
+    text-shadow: 0 0 24px rgba(255, 255, 255, .45); }
   #inicio p { letter-spacing: .45em; font-size: 12px; color: var(--apagado); text-transform: uppercase;
     animation: piscar 2s ease-in-out infinite; }
   @media (max-width: 760px) { .hud .linha { display: none; } }

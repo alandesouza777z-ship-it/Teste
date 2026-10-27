@@ -29,23 +29,21 @@ def _js(funcao: str, *argumentos) -> None:
         janela.evaluate_js(f"jarvis.{funcao}({', '.join(json.dumps(a) for a in argumentos)})")
 
 
-def falar_na_interface(texto: str) -> None:
-    print(f"JARVIS: {texto}")
-    if not texto.strip():
-        return
-    import voz
-
-    try:
-        audio = voz.sintetizar(texto)
-    except Exception:
-        # Sem internet: voz do sistema, com a esfera simulando a fala.
-        _js("falarSemAudio", max(1.5, len(texto) / 14))
-        voz.falar_offline(texto)
-        return
+def tocar_na_interface(audio: bytes) -> None:
+    """Manda o MP3 para a interface tocar (e animar a esfera) e espera acabar."""
     fala_terminou.clear()
     _js("falar", base64.b64encode(audio).decode())
     # A interface avisa quando o áudio acaba; o limite evita travar se algo falhar.
-    fala_terminou.wait(timeout=max(10, len(texto) / 6))
+    # (edge-tts gera MP3 a 48 kbps: ~6000 bytes por segundo de fala.)
+    fala_terminou.wait(timeout=len(audio) / 6000 + 3)
+
+
+def falar_offline_na_interface(texto: str) -> None:
+    """Sem internet: voz do sistema, com a esfera simulando a fala."""
+    import voz
+
+    _js("falarSemAudio", max(1.5, len(texto) / 14))
+    voz.falar_offline(texto)
 
 
 class Api:
@@ -59,7 +57,8 @@ class Api:
             _js("mensagem", "jarvis", f"Chave da API não encontrada. Crie o arquivo .env em {config.PASTA_USUARIO}.")
             return
         assistente = Assistente(
-            falar=falar_na_interface,
+            tocar_audio=tocar_na_interface,
+            tocar_offline=falar_offline_na_interface,
             ao_estado=lambda estado: _js("estado", estado),
             ao_mensagem=lambda quem, texto: _js("mensagem", quem, texto),
             ao_confirmar=lambda pergunta: _js("confirmar", pergunta),
