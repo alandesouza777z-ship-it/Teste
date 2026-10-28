@@ -13,6 +13,7 @@ pyinstaller --noconfirm --clean --windowed --name JARVIS --icon icone.ico \
   --collect-data speech_recognition \
   --collect-submodules pyttsx3 \
   --hidden-import edge_tts \
+  --hidden-import webrtcvad --additional-hooks-dir hooks \
   app.py
 
 # No macOS o PyInstaller gera dist/JARVIS.app; no Linux, dist/JARVIS/JARVIS.

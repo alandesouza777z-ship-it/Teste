@@ -4,9 +4,14 @@ REM Basta dar dois cliques neste arquivo (precisa do Python 3.12 instalado).
 chcp 65001 >nul
 cd /d "%~dp0"
 
-echo [1/6] Fechando versoes antigas do JARVIS...
+echo [1/6] Fechando e apagando a versao antiga do JARVIS...
 taskkill /IM JARVIS-Palmas.exe /F >nul 2>&1
 taskkill /IM JARVIS.exe /F >nul 2>&1
+timeout /t 2 /nobreak >nul
+if exist dist\JARVIS\.env copy /y dist\JARVIS\.env .env.anterior >nul
+if exist dist rmdir /s /q dist
+if exist build rmdir /s /q build
+if not exist .env if exist .env.anterior copy /y .env.anterior .env >nul
 
 echo [2/6] Preparando ambiente Python...
 if not exist .venv python -m venv .venv || goto erro
@@ -28,9 +33,10 @@ pyinstaller --noconfirm --clean --windowed --name JARVIS --icon icone.ico ^
   --collect-all ctranslate2 ^
   --hidden-import edge_tts ^
   --hidden-import webrtcvad ^
+  --additional-hooks-dir hooks ^
   app.py || goto erro
 pyinstaller --noconfirm --onefile --windowed --name JARVIS-Palmas --icon icone.ico ^
-  --distpath dist\JARVIS --workpath build\palmas ^
+  --distpath dist\JARVIS --workpath build\palmas --additional-hooks-dir hooks ^
   palmas.py || goto erro
 
 if exist .env copy /y .env dist\JARVIS\.env >nul
