@@ -57,7 +57,8 @@ def _carregar_whisper() -> None:
         try:
             import numpy as np
 
-            modelo = WhisperModel(MODELO_WHISPER, device="cuda", compute_type="int8_float16")
+            nome_gpu = MODELO_WHISPER if os.getenv("JARVIS_WHISPER_MODELO") else "large-v3-turbo"
+            modelo = WhisperModel(nome_gpu, device="cuda", compute_type="int8_float16")
             list(modelo.transcribe(np.zeros(16000, dtype=np.float32), language="pt")[0])
             print("Whisper rodando na placa de vídeo.")
         except Exception:
@@ -105,6 +106,8 @@ def _ajustar_velocidade(segundos: float) -> None:
 
 def preparar_reconhecimento() -> None:
     """Começa a carregar o Whisper em segundo plano (enquanto isso, usa o Google)."""
+    if GROQ_CHAVE and os.getenv("JARVIS_WHISPER_RESERVA", "0") != "1":
+        return  # com o Groq não precisa carregar o modelo local (economiza memória e CPU)
     if RECONHECIMENTO == "whisper" and _whisper_status == "parado":
         threading.Thread(target=_carregar_whisper, daemon=True).start()
 
@@ -135,10 +138,48 @@ def _transcrever_whisper(audio: sr.AudioData) -> list[str]:
         beam_size=1,  # bem mais rápido, quase a mesma precisão
         vad_filter=True,
         condition_on_previous_text=False,
-        initial_prompt=VOCABULARIO,
+        initial_prompt=_vocabulario_atual(),
     )
     partes = [s.text.strip() for s in segmentos if s.no_speech_prob < 0.6 and s.avg_logprob > -1.2]
     texto = " ".join(partes).strip()
+    if not texto or any(a in texto.lower() for a in ALUCINACOES):
+        return []
+    return [texto]
+
+
+GROQ_CHAVE = os.getenv("GROQ_API_KEY", "")
+GROQ_MODELO = os.getenv("JARVIS_GROQ_MODELO", "whisper-large-v3-turbo")
+_vocabulario = {"texto": VOCABULARIO, "quando": 0.0}
+
+
+def _vocabulario_atual() -> str:
+    """Vocabulário fixo + nomes dos seus hábitos, livros e clientes (atualizado a cada minuto)."""
+    if time.time() - _vocabulario["quando"] > 60:
+        try:
+            import dados
+
+            extras = dados.vocabulario()
+            _vocabulario["texto"] = VOCABULARIO + (" " + extras + "." if extras else "")
+        except Exception:
+            pass
+        _vocabulario["quando"] = time.time()
+    return _vocabulario["texto"]
+
+
+def _transcrever_groq(audio: sr.AudioData) -> list[str]:
+    """Whisper large-v3-turbo na nuvem do Groq: o mais preciso e o mais rápido (~0,3 s)."""
+    import requests
+
+    resposta = requests.post(
+        "https://api.groq.com/openai/v1/audio/transcriptions",
+        headers={"Authorization": f"Bearer {GROQ_CHAVE}"},
+        files={"file": ("fala.wav", audio.get_wav_data(convert_rate=16000), "audio/wav")},
+        data={"model": GROQ_MODELO, "language": "pt", "prompt": _vocabulario_atual()[:800],
+              "response_format": "json", "temperature": "0"},
+        timeout=6,
+    )
+    resposta.raise_for_status()
+    texto = resposta.json().get("text", "").strip()
     if not texto or any(a in texto.lower() for a in ALUCINACOES):
         return []
     return [texto]
@@ -250,6 +291,11 @@ def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 
             return []
     inicio = time.time()
     try:
+        if GROQ_CHAVE:
+            try:
+                return _transcrever_groq(audio)
+            except Exception as erro:
+                print(f"Groq falhou ({erro}); usando o reconhecimento local.")
         if _whisper_status == "pronto":
             try:
                 resultado = _transcrever_whisper(audio)

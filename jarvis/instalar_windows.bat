@@ -31,6 +31,7 @@ pyinstaller --noconfirm --clean --windowed --name JARVIS --icon icone.ico ^
   --collect-submodules pyttsx3 ^
   --collect-all faster_whisper ^
   --collect-all ctranslate2 ^
+  --collect-all playwright ^
   --hidden-import edge_tts ^
   --hidden-import webrtcvad ^
   --additional-hooks-dir hooks ^

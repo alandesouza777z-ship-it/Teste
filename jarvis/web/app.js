@@ -4,6 +4,7 @@ import { EffectComposer } from "./jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "./jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "./jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "./jsm/postprocessing/OutputPass.js";
+import { abrirArea, atualizarArea } from "./areas.js";
 
 // ---------- Renderizador, câmera e pós-processamento ----------
 const canvas = document.getElementById("cena");
@@ -611,6 +612,8 @@ window.jarvis = {
   },
   confirmar() { elConfirmacao.classList.add("ativa"); },
   tempos(texto) { $("tempos").textContent = texto; },
+  abrirArea,
+  atualizarArea,
   modo: mostrarModo,
   mudo: mostrarMudo,
 };

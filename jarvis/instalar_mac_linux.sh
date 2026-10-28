@@ -11,6 +11,7 @@ pip install -r requirements.txt pyinstaller
 pyinstaller --noconfirm --clean --windowed --name JARVIS --icon icone.ico \
   --add-data "web:web" \
   --collect-data speech_recognition \
+  --collect-all faster_whisper --collect-all ctranslate2 --collect-all playwright \
   --collect-submodules pyttsx3 \
   --hidden-import edge_tts \
   --hidden-import webrtcvad --additional-hooks-dir hooks \

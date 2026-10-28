@@ -22,7 +22,7 @@ os.environ.setdefault("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-polic
 import webview  # noqa: E402
 
 from assistente import Assistente  # noqa: E402
-from ferramentas import aplicativos  # noqa: E402
+from ferramentas import aplicativos, areas  # noqa: E402
 
 ARQUIVO_PID = os.path.join(config.PASTA_USUARIO, ".jarvis.pid")
 EFEITO_VOZ = os.getenv("JARVIS_EFEITO_VOZ", "1") != "0"
@@ -113,6 +113,12 @@ class Api:
         if assistente is not None and texto.strip():
             assistente.enviar(texto.strip())
 
+    def area(self, area, acao="ler", params=None):
+        """Dados das áreas (finanças, hábitos, academia, leitura, aprendizado, CRM) para a interface."""
+        import dados
+
+        return dados.api_area(area, acao, params or {})
+
     def audio_terminou(self):
         fala_terminou.set()
 
@@ -143,6 +149,9 @@ def main() -> None:
     global janela
     _registrar_aberto()
     aplicativos.preparar()
+    # A voz abre áreas e avisa a tela quando algum dado muda ("gastei 50 no almoço" atualiza Finanças).
+    areas.ao_abrir_area = lambda area: _js("abrirArea", area)
+    areas.ao_dados_mudaram = lambda area: _js("atualizarArea", area)
     janela = webview.create_window(
         "J.A.R.V.I.S.",
         os.path.join(config.PASTA_PROGRAMA, "web", "index.html"),

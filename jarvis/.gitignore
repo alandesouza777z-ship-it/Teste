@@ -9,3 +9,5 @@ dist/
 .venv/
 *.spec
 .env.anterior
+jarvis.db
+whatsapp-sessao/

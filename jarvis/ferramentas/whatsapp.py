@@ -32,10 +32,25 @@ def _numero(contato: str) -> str | None:
 def enviar_whatsapp(contato: str, mensagem: str) -> str:
     numero = _numero(contato)
     if not numero:
+        import dados
+
+        cliente = dados.achar_cliente(contato)  # também procura entre os clientes do CRM
+        numero = _numero(cliente["telefone"]) if cliente and cliente["telefone"] else None
+    if not numero:
         nomes = ", ".join(_contatos()) or "nenhum"
         return f"Não conheço o contato '{contato}'. Contatos salvos: {nomes}. Peça o número ao usuário."
     if not confirmar(f"Enviar para {contato}: \"{mensagem}\"?"):
         return "O usuário cancelou o envio."
+    try:
+        # Janela própria do WhatsApp (rápida, sem abrir e fechar abas).
+        from . import whatsapp_atendimento
+
+        resultado = whatsapp_atendimento.enviar_mensagem(numero, mensagem)
+        if resultado.startswith("Mensagem enviada"):
+            return f"Mensagem enviada para {contato}."
+        print(f"WhatsApp (janela própria): {resultado}")
+    except Exception as erro:
+        print(f"WhatsApp (janela própria) falhou: {erro}; tentando pelo navegador padrão.")
     try:
         import pywhatkit
 

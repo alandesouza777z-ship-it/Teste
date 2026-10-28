@@ -18,7 +18,48 @@ Exemplos do que você pode dizer:
 - "Modo respostas longas" / "Modo curto" — muda o tamanho das respostas
 - "Desligar" encerra o assistente.
 
+## Áreas
+
+Abas no topo (ou pela voz: "abra hábitos", "mostra o CRM", "volta pro início"; `Esc` fecha):
+
+| Área | O que guarda | Exemplos de voz |
+|---|---|---|
+| **Finanças** | receitas, despesas, saldo do mês, gastos por categoria | "gastei 50 reais no almoço", "recebi 2500 do cliente João", "quanto gastei esse mês?" |
+| **Hábitos** | hábitos com os últimos 7 dias e sequência | "marquei o hábito de meditar", "como estão meus hábitos?" |
+| **Academia** | exercícios, séries, carga, recordes | "fiz supino 4 de 10 com 60 quilos e agachamento 4 de 8 com 80" |
+| **Leitura** | estante com progresso de cada livro | "comecei a ler O Poder do Hábito, 400 páginas", "li 20 páginas" |
+| **Aprendizado** | o que o JARVIS sabe para atender clientes + seus estudos | "aprenda que a instalação custa 300 reais", "estudei 30 minutos de inglês" |
+| **CRM** | funil de clientes (lead, negociação, cliente, perdido) com histórico | "cadastra a cliente Fernanda, telefone ..., em negociação de 1200 reais" |
+
+Tudo fica salvo no seu computador, no arquivo `jarvis.db` (ao lado do `.env`). Dá também para
+adicionar, marcar e excluir direto na tela.
+
+## Atendimento no WhatsApp
+
+Diga **"atenda o WhatsApp"** (ou clique em **Atender WhatsApp** no CRM). O JARVIS:
+
+1. abre o WhatsApp Web numa janela própria do Chrome (na primeira vez, escaneie o QR Code em
+   *Aparelhos conectados* no celular; depois a sessão fica salva);
+2. lê as conversas não lidas, diz quem escreveu e o que quer;
+3. escreve a resposta usando **só o que você ensinou** na área de Aprendizado e a ficha do cliente
+   no CRM (clientes novos entram como *lead* automaticamente);
+4. **lê a resposta e pergunta se pode enviar** (diga "sim" ou clique). Com
+   `JARVIS_ATENDIMENTO=automatico` no `.env`, ele envia sem perguntar;
+5. anota a conversa no histórico do cliente.
+
+"Manda mensagem pro João dizendo..." também usa essa janela e encontra o telefone pelo CRM.
+
+**Atenção:** o WhatsApp não tem integração oficial para contas comuns e proíbe automações em
+massa. Use para responder seus clientes no dia a dia, não para disparos. Se o WhatsApp mudar o
+site, essa parte pode precisar de ajuste.
+
 ## Velocidade
+
+- **Reconhecimento de voz em ~0,3 s (recomendado):** crie uma chave grátis em
+  https://console.groq.com/keys e coloque em `GROQ_API_KEY` no `.env`. Ele passa a usar o Whisper
+  *large-v3-turbo* (o modelo grande, bem mais preciso que o do PC) e não precisa mais carregar
+  nada no seu computador. Sem a chave, ele usa o Whisper local.
+- Ele aprende os nomes dos seus hábitos, livros e clientes para reconhecê-los melhor.
 
 - **Comandos instantâneos**: "abre o X", "fecha o X", "pausa", "próxima", "volta a música",
   "aumenta/diminui o volume", "silencia" e "que horas são" são feitos na hora, sem esperar a IA.
@@ -194,6 +235,10 @@ Comandos de terminal e mensagens de WhatsApp continuam pedindo confirmação.
 | `ferramentas/aplicativos.py` | Abrir, fechar e alternar aplicativos |
 | `ferramentas/controle.py` | Ver a tela, clicar, teclas, pastas e arquivos |
 | `ferramentas/computador.py` | Sites, volume, mídia, print, sistema, comandos |
+| `dados.py` | Banco de dados das áreas (SQLite) |
+| `web/areas.js` | Telas das áreas |
+| `ferramentas/areas.py` | Comandos de voz das áreas |
+| `ferramentas/whatsapp_atendimento.py` | Ler e responder clientes no WhatsApp Web |
 | `ferramentas/navegador.py` | Chrome e WhatsApp Web (sites, conversas não lidas) |
 | `ferramentas/spotify.py` | Tocar, pausar, pular, volume, música atual |
 | `ferramentas/whatsapp.py` | Enviar mensagens e abrir conversas |
