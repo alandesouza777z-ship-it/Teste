@@ -97,6 +97,8 @@ class Cerebro:
             messages=self.historico,
             # Esforço baixo = respostas rápidas, que é o que importa numa conversa por voz.
             output_config={"effort": "low"},
+            # Sem a etapa de "pensar" nas respostas curtas e médias: começa a falar mais rápido.
+            thinking={"type": "adaptive"} if self.modo == "longa" else {"type": "disabled"},
             cache_control={"type": "ephemeral"},
         ) as stream:
             buffer = ""

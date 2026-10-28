@@ -13,6 +13,7 @@ import threading
 import time
 
 import voz
+from atalhos import executar_atalho
 from cerebro import MODOS, NOME_USUARIO, Cerebro
 from ferramentas import confirmacao, navegador, spotify
 
@@ -44,7 +45,7 @@ def saudacao() -> str:
 class Assistente:
     def __init__(self, tocar_audio=voz.tocar_mp3, tocar_offline=voz.falar_offline,
                  ao_estado=_nada, ao_mensagem=_nada, ao_confirmar=_nada, ao_encerrar=_nada,
-                 ao_modo=_nada, ao_mudo=_nada, veio_das_palmas=False):
+                 ao_modo=_nada, ao_mudo=_nada, ao_tempos=print, veio_das_palmas=False):
         """
         tocar_audio(mp3): toca o áudio e só retorna quando terminar.
         tocar_offline(texto): fala sem internet (voz do sistema).
@@ -61,6 +62,12 @@ class Assistente:
         self.ao_encerrar = ao_encerrar
         self.ao_modo = ao_modo
         self.ao_mudo = ao_mudo
+        self.ao_tempos = ao_tempos
+        self._t_pedido = None
+        self._t_transcricao = 0.0
+        # Assim que você termina de falar, a esfera já mostra "processando" (antes mesmo de transcrever).
+        voz.ao_fim_da_fala = lambda: self.ao_estado("pensando")
+        voz.preparar_reconhecimento()  # o Whisper já começa a carregar enquanto ele dá bom dia
         self.veio_das_palmas = veio_das_palmas
         self.escuta_continua = ESCUTA_CONTINUA
         self.mudo = False
@@ -84,6 +91,11 @@ class Assistente:
     # ---------- Fala ----------
 
     def _ao_comecar_frase(self, texto: str) -> None:
+        if self._t_pedido is not None:
+            # Cronômetro: quanto tempo do fim da sua fala até ele começar a responder.
+            resposta = time.time() - self._t_pedido
+            self.ao_tempos(f"entender {self._t_transcricao:.1f}s · responder {resposta:.1f}s")
+            self._t_pedido = None
         print(f"JARVIS: {texto}")
         self.ao_mensagem("jarvis" if self._nova_resposta else "jarvis+", texto)
         self._nova_resposta = False
@@ -253,7 +265,20 @@ class Assistente:
                 self._dizer_e_esperar(f"Desligando. Até logo, {NOME_USUARIO}.")
                 self.ao_encerrar()
                 return
+            self._t_pedido = time.time()
+            self._t_transcricao = 0.0 if digitado else voz.ultimo_tempo_transcricao
             if self._comando_rapido(pedido):
+                continue
+            # Pedidos simples (abrir app, música, volume, hora) são feitos na hora, sem esperar o Claude.
+            try:
+                confirmacao_rapida = executar_atalho(pedido)
+            except Exception as erro:
+                print(f"Atalho falhou: {erro}")
+                confirmacao_rapida = None
+            if confirmacao_rapida:
+                self._dizer_e_esperar(confirmacao_rapida)
+                self.ao_estado("mudo" if self.mudo else "ocioso")
+                conversa_ate = time.time() + JANELA_CONVERSA
                 continue
 
             self._processar(pedido)

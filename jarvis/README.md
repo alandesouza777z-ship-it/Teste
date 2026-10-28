@@ -18,6 +18,16 @@ Exemplos do que você pode dizer:
 - "Modo respostas longas" / "Modo curto" — muda o tamanho das respostas
 - "Desligar" encerra o assistente.
 
+## Velocidade
+
+- **Comandos instantâneos**: "abre o X", "fecha o X", "pausa", "próxima", "volta a música",
+  "aumenta/diminui o volume", "silencia" e "que horas são" são feitos na hora, sem esperar a IA.
+- Ele detecta **voz** (não volume): para de gravar meio segundo depois que você termina de falar,
+  mesmo com ventilador ou barulho de fundo.
+- Embaixo do estado aparece um **cronômetro** ("entender 0.4s · responder 1.1s"): quanto tempo levou
+  para transcrever sua fala e para começar a responder.
+- Se o seu PC demorar mais de 2,5 s para transcrever, ele troca sozinho para um modelo de voz mais leve.
+
 ## Tamanho das respostas
 
 Nos botões **CURTA · MÉDIA · LONGA** ao lado da caixa de texto (ou pela voz):

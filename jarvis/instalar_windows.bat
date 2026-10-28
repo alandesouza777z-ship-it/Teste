@@ -27,6 +27,7 @@ pyinstaller --noconfirm --clean --windowed --name JARVIS --icon icone.ico ^
   --collect-all faster_whisper ^
   --collect-all ctranslate2 ^
   --hidden-import edge_tts ^
+  --hidden-import webrtcvad ^
   app.py || goto erro
 pyinstaller --noconfirm --onefile --windowed --name JARVIS-Palmas --icon icone.ico ^
   --distpath dist\JARVIS --workpath build\palmas ^

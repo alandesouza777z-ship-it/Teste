@@ -75,9 +75,11 @@
   #registro .vazio { border: 0; padding: 0; color: var(--apagado); font-style: italic; }
 
   /* Centro inferior */
-  #estado { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); font-family: var(--hud);
+  #estado { position: fixed; left: 50%; bottom: 174px; transform: translateX(-50%); font-family: var(--hud);
     font-size: 12px; font-weight: 500; letter-spacing: .6em; margin-right: -.6em; color: var(--branco);
     text-transform: uppercase; pointer-events: none; text-shadow: 0 0 12px rgba(255,255,255,.6); }
+  #tempos { position: fixed; left: 50%; bottom: 156px; transform: translateX(-50%); font: 500 10px var(--hud);
+    letter-spacing: .25em; color: var(--apagado); text-transform: uppercase; pointer-events: none; }
   #legendas { position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%);
     width: min(780px, calc(100% - 32px)); text-align: center; pointer-events: none; }
   #voce { color: var(--apagado); font-size: 13px; min-height: 18px; font-style: italic; }
@@ -106,7 +108,7 @@
   #entrada:focus { border-color: rgba(255,255,255,.45); box-shadow: 0 0 24px rgba(255,255,255,.08); }
   #entrada::placeholder { color: var(--apagado); }
 
-  #confirmacao { position: fixed; left: 50%; bottom: 196px; transform: translateX(-50%); display: none; gap: 14px; }
+  #confirmacao { position: fixed; left: 50%; bottom: 206px; transform: translateX(-50%); display: none; gap: 14px; }
   #confirmacao.ativa { display: flex; animation: entrar .3s ease both; }
   .botao { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.55); color: var(--branco);
     padding: 9px 30px; border-radius: 20px; font: 600 12px var(--hud); letter-spacing: .35em; cursor: pointer;
@@ -157,6 +159,7 @@
   </aside>
 
   <div id="estado">inicializando</div>
+  <div id="tempos" title="Tempo para entender sua fala e para começar a responder"></div>
   <div id="confirmacao">
     <button class="botao" data-resposta="sim">SIM</button>
     <button class="botao" data-resposta="não">NÃO</button>

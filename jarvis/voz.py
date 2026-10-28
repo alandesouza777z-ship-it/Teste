@@ -2,11 +2,14 @@
 
 import asyncio
 import io
+import math
 import os
 import queue
 import re
 import threading
+import time
 import unicodedata
+from array import array
 from difflib import SequenceMatcher
 
 import speech_recognition as sr
@@ -58,13 +61,46 @@ def _carregar_whisper() -> None:
             list(modelo.transcribe(np.zeros(16000, dtype=np.float32), language="pt")[0])
             print("Whisper rodando na placa de vídeo.")
         except Exception:
-            modelo = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8",
-                                  cpu_threads=max(1, (os.cpu_count() or 4)))
+            modelo = _carregar_cpu(MODELO_WHISPER)
         _whisper = modelo
         _whisper_status = "pronto"
     except Exception as erro:
         print(f"Whisper indisponível ({erro}); usando o reconhecimento do Google.")
         _whisper_status = "erro"
+
+
+def _carregar_cpu(nome: str):
+    import numpy as np
+    from faster_whisper import WhisperModel
+
+    modelo = WhisperModel(nome, device="cpu", compute_type="int8", cpu_threads=max(1, (os.cpu_count() or 4)))
+    # Aquecimento: a primeira transcrição é sempre lenta; melhor que seja agora, e não na sua primeira fala.
+    list(modelo.transcribe(np.zeros(16000, dtype=np.float32), language="pt")[0])
+    return modelo
+
+
+_lentas_seguidas = 0
+
+
+def _ajustar_velocidade(segundos: float) -> None:
+    """Se o PC não der conta do modelo atual a tempo, troca sozinho por um mais leve."""
+    global _lentas_seguidas, MODELO_WHISPER
+    _lentas_seguidas = _lentas_seguidas + 1 if segundos > 2.5 else 0
+    mais_leve = {"medium": "small", "small": "base"}.get(MODELO_WHISPER)
+    if _lentas_seguidas < 2 or not mais_leve:
+        return
+    _lentas_seguidas = 0
+    MODELO_WHISPER = mais_leve
+    print(f"Reconhecimento lento ({segundos:.1f}s); trocando para o modelo '{mais_leve}'.")
+
+    def trocar():
+        global _whisper
+        try:
+            _whisper = _carregar_cpu(mais_leve)
+        except Exception as erro:
+            print(f"Não consegui trocar de modelo: {erro}")
+
+    threading.Thread(target=trocar, daemon=True).start()
 
 
 def preparar_reconhecimento() -> None:
@@ -118,27 +154,115 @@ def _transcrever_google(audio: sr.AudioData) -> list[str]:
     return [alt["transcript"] for alt in resultado.get("alternative", []) if alt.get("transcript")]
 
 
-def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 25) -> list[str]:
-    """Escuta o microfone e devolve as interpretações possíveis da frase (a mais provável primeiro)."""
-    global _fonte
-    if _fonte is None:
-        preparar_reconhecimento()
-        # O microfone fica aberto o tempo todo: reabrir a cada escuta perdia o começo das frases.
-        _fonte = sr.Microphone(sample_rate=16000).__enter__()
-        _reconhecedor.adjust_for_ambient_noise(_fonte, duration=1.5)
+QUADRO = 480            # 30 ms de áudio a 16 kHz (tamanho que o detector de voz usa)
+FIM_DE_FALA = 0.5       # segundos de silêncio (sem voz) que encerram a frase
+ultimo_tempo_transcricao = 0.0
+ao_fim_da_fala = None   # chamado assim que você termina de falar (antes de transcrever)
+_vad = None
+_piso_ruido = 300.0
+
+
+def _rms(quadro: bytes) -> float:
+    amostras = array("h", quadro)
+    return math.sqrt(sum(a * a for a in amostras) / len(amostras)) if amostras else 0.0
+
+
+def _abrir_microfone() -> None:
+    global _fonte, _vad, _piso_ruido
+    preparar_reconhecimento()
+    # O microfone fica aberto o tempo todo: reabrir a cada escuta perdia o começo das frases.
+    _fonte = sr.Microphone(sample_rate=16000, chunk_size=QUADRO).__enter__()
     try:
-        audio = _reconhecedor.listen(_fonte, timeout=tempo_limite, phrase_time_limit=limite_frase)
-    except sr.WaitTimeoutError:
-        return []
-    if _whisper_status == "pronto":
+        import webrtcvad
+
+        _vad = webrtcvad.Vad(2)
+        niveis = [_rms(_fonte.stream.read(QUADRO)) for _ in range(30)]  # ~1 s de ruído de fundo
+        _piso_ruido = max(150.0, sorted(niveis)[len(niveis) // 2])
+    except ImportError:
+        _reconhecedor.adjust_for_ambient_noise(_fonte, duration=1.5)
+
+
+def _descartar_audio_antigo() -> None:
+    """Joga fora o que o microfone captou enquanto o JARVIS falava ou pensava."""
+    try:
+        disponivel = _fonte.stream.pyaudio_stream.get_read_available()
+        while disponivel >= QUADRO:
+            _fonte.stream.read(QUADRO)
+            disponivel -= QUADRO
+    except Exception:
+        pass
+
+
+def _gravar_frase_vad(tempo_limite: float | None, limite_frase: float) -> bytes | None:
+    """Grava uma frase usando detecção de VOZ (não de volume): termina 0,5 s depois que você para de falar,
+    mesmo com ventilador, música baixa ou barulho de fundo."""
+    global _piso_ruido
+    from collections import deque
+
+    _descartar_audio_antigo()
+    antes = deque(maxlen=10)          # 300 ms antes do início, para não cortar a primeira sílaba
+    janela = deque(maxlen=10)
+    quadros_fim = int(FIM_DE_FALA / 0.03)
+    inicio_espera = time.time()
+    while True:
+        quadro = _fonte.stream.read(QUADRO)
+        nivel = _rms(quadro)
+        voz_aqui = _vad.is_speech(quadro, 16000) and nivel > _piso_ruido * 1.8
+        antes.append(quadro)
+        janela.append(voz_aqui)
+        if sum(janela) >= 6:          # 180 ms de voz em 300 ms: você começou a falar
+            break
+        if not voz_aqui:
+            _piso_ruido = _piso_ruido * 0.98 + max(nivel, 50) * 0.02
+        if tempo_limite is not None and time.time() - inicio_espera > tempo_limite:
+            return None
+    gravado = list(antes)
+    silencio = 0
+    limite = time.time() + limite_frase
+    while time.time() < limite:
+        quadro = _fonte.stream.read(QUADRO)
+        gravado.append(quadro)
+        if _vad.is_speech(quadro, 16000) and _rms(quadro) > _piso_ruido * 1.5:
+            silencio = 0
+        else:
+            silencio += 1
+            if silencio >= quadros_fim:
+                break
+    if ao_fim_da_fala:
+        ao_fim_da_fala()
+    return b"".join(gravado)
+
+
+def ouvir_alternativas(tempo_limite: float | None = None, limite_frase: float = 15) -> list[str]:
+    """Escuta o microfone e devolve as interpretações possíveis da frase (a mais provável primeiro)."""
+    global ultimo_tempo_transcricao
+    if _fonte is None:
+        _abrir_microfone()
+    if _vad is not None:
+        bruto = _gravar_frase_vad(tempo_limite, limite_frase)
+        if bruto is None:
+            return []
+        audio = sr.AudioData(bruto, 16000, 2)
+    else:
         try:
-            return _transcrever_whisper(audio)
-        except Exception as erro:
-            print(f"Erro no Whisper: {erro}")
-    return _transcrever_google(audio)
+            audio = _reconhecedor.listen(_fonte, timeout=tempo_limite, phrase_time_limit=limite_frase)
+        except sr.WaitTimeoutError:
+            return []
+    inicio = time.time()
+    try:
+        if _whisper_status == "pronto":
+            try:
+                resultado = _transcrever_whisper(audio)
+                _ajustar_velocidade(time.time() - inicio)
+                return resultado
+            except Exception as erro:
+                print(f"Erro no Whisper: {erro}")
+        return _transcrever_google(audio)
+    finally:
+        ultimo_tempo_transcricao = time.time() - inicio
 
 
-def ouvir(tempo_limite: float | None = None, limite_frase: float = 25) -> str:
+def ouvir(tempo_limite: float | None = None, limite_frase: float = 15) -> str:
     alternativas = ouvir_alternativas(tempo_limite, limite_frase)
     return alternativas[0] if alternativas else ""
 

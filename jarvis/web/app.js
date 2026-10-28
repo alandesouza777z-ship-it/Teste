@@ -610,6 +610,7 @@ window.jarvis = {
     el.textContent = quem === "voce" ? `“${texto}”` : texto;
   },
   confirmar() { elConfirmacao.classList.add("ativa"); },
+  tempos(texto) { $("tempos").textContent = texto; },
   modo: mostrarModo,
   mudo: mostrarMudo,
 };

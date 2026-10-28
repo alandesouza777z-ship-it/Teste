@@ -1,6 +1,7 @@
 anthropic>=2.3.0
 python-dotenv>=1.0
 SpeechRecognition>=3.10
+webrtcvad-wheels>=2.0.14
 PyAudio>=0.2.14
 faster-whisper>=1.1
 numpy>=1.26
